@@ -1,0 +1,62 @@
+[tool.poetry]
+name = "fast-grpc"
+version = "0.1.0"
+description = "fast to code grpc in python"
+authors = ["taogeYT <li_yatao@outlook.com>"]
+readme = "README.md"
+packages = [{include = "fast_grpc"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+grpcio = "^1.53.0"
+pydantic = "^1.10.7"
+protobuf = "^4.22.3"
+mypy-protobuf = "^3.4.0"
+grpcio-tools = "^1.54.0"
+logzero = "^1.7.0"
+blinker = "^1.6.2"
+
+[tool.poetry.dev-dependencies]
+isort = "^5.10.1"
+black = "^22.3.0"
+flake8 = "^4.0"
+mypy = "^0.931"
+pytest = "^7.1.2"
+pytest-asyncio = "^0.18.3"
+types-toml = "^0.10.8"
+types-requests = "^2.28.11"
+ipython = "^8.12.0"
+types-protobuf = "3.20.4.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+python_version = "3.9"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+allow_redefinition = true
+no_implicit_optional = true
+local_partial_types = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[tool.black]
+target-version = [ "py39" ]
+line-length = 120
+skip-numeric-underscore-normalization = true
+exclude = 'dist|build|\.venv|\.git|\.mypy_cache'
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-svv -p no:warnings"
+testpaths = ["tests"]
+asyncio_mode = "auto"
