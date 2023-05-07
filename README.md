@@ -1,9 +1,10 @@
 # fast-grpc
-fast to code grpc in python
+fast to code grpc in Python 3.9+
 
 # Installation
+Require Python 3.9+
 ```shell
-pip3 install fast-grpc
+pip install python-fast-grpc
 ```
 
 # Quick start
