@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from enum import IntEnum as _IntEnum
-from typing import TYPE_CHECKING, Awaitable, Callable, Generic, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Awaitable, Callable, Generic, Optional, TypeVar
 
 from google.protobuf.message import Message
 from grpc.aio import ServicerContext
@@ -113,7 +113,7 @@ class IntEnum(_IntEnum):
 
     @classmethod
     def _missing_(cls, value):
-        logger.info(f"{cls.__qualname__} missing {value=}")
+        logger.info(f"{cls.__qualname__} missing value={value}")
         unknown = cls._value2member_map_.get(0)
         if not isinstance(value, int) and unknown is None:
             raise ValueError("%r is not a valid %s" % (value, cls.__qualname__))

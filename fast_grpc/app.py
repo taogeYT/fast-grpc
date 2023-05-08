@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import inspect
-from typing import Any, Callable, Optional, Sequence, Type
+from typing import Any, Callable, List, Optional, Sequence, Type
 
 import grpc
-from grpc.aio._typing import ChannelArgumentType
+from grpc.aio._typing import ChannelArgumentType  # noqa
 from logzero import logger
 from pydantic import BaseModel
 
@@ -23,9 +23,9 @@ class FastGRPC(object):
         self.default_service_name = default_service_name
         self.service = Service(service_name=self.default_service_name)
 
-        self.rpc_startup_funcs: list[Callable[..., Any]] = []
-        self.rpc_shutdown_funcs: list[Callable[..., Any]] = []
-        self.user_middleware: list[Middleware] = [] if middleware is None else list(middleware)
+        self.rpc_startup_funcs: List[Callable[..., Any]] = []
+        self.rpc_shutdown_funcs: List[Callable[..., Any]] = []
+        self.user_middleware: List[Middleware] = [] if middleware is None else list(middleware)
         self.middleware_stack: App = self.build_middleware_stack()
 
     def setup(self) -> None:

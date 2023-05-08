@@ -2,9 +2,8 @@
 import inspect
 import os
 from concurrent.futures import ThreadPoolExecutor
-from functools import cached_property
 from importlib import import_module
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
 
@@ -42,7 +41,7 @@ class ServiceMetaclass(type):
 class Service:
     def __init__(self, service_name: str, package_name: str = "", proto_path="."):
         self.service_name = service_name
-        self.methods: list[Method] = []
+        self.methods: List[Method] = []
         self.proto_path = proto_path
         self.thread_pool: Optional[ThreadPoolExecutor] = None
 
@@ -58,19 +57,29 @@ class Service:
         else:
             self.package_name = self.proto_name
 
-    @cached_property
+        self._proto_file = None
+        self._pb2 = None
+        self._pb2_grpc = None
+
+    @property
     def proto_file(self):
-        if not os.path.exists(self.proto_path):
-            os.makedirs(self.proto_path)
-        return os.path.join(self.proto_path, f"{self.proto_name}.proto")
+        if self._proto_file is None:
+            if not os.path.exists(self.proto_path):
+                os.makedirs(self.proto_path)
+            self._proto_file = os.path.join(self.proto_path, f"{self.proto_name}.proto")
+        return self._proto_file
 
-    @cached_property
+    @property
     def pb2(self):
-        return import_module(f"{self.package_name}_pb2")
+        if self._pb2 is None:
+            self._pb2 = import_module(f"{self.package_name}_pb2")
+        return self._pb2
 
-    @cached_property
+    @property
     def pb2_grpc(self):
-        return import_module(f"{self.package_name}_pb2_grpc")
+        if self._pb2_grpc is None:
+            self._pb2_grpc = import_module(f"{self.package_name}_pb2_grpc")
+        return self._pb2_grpc
 
     def gen_and_compile_proto(self):
         builder = ProtoBuilder(self)

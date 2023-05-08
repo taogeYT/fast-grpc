@@ -2,12 +2,10 @@
 import asyncio
 import contextvars
 import functools
-import inspect
 import os
 import re
 import sys
 from importlib import import_module
-from typing import Callable
 
 
 def import_string(dotted_path):

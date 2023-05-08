@@ -2,10 +2,11 @@
 import datetime
 from collections import deque
 from enum import IntEnum
-from typing import List, Type, Union, get_args, get_origin
+from typing import List, Set, Type, Union
 
 from grpc_tools import protoc
 from pydantic import BaseModel
+from typing_extensions import get_args, get_origin
 
 from fast_grpc.types import (
     BoolValue,
@@ -90,9 +91,9 @@ class ProtoBuilder:
 
         self.service: Service = service
         self.queue: deque[Union[Type[BaseModel], Type[IntEnum]]] = deque()
-        self.messages: set[Union[Type[BaseModel], Type[IntEnum]]] = set()
+        self.messages: Set[Union[Type[BaseModel], Type[IntEnum]]] = set()
 
-        self.import_packages: set[str] = set()
+        self.import_packages: Set[str] = set()
 
     def create(self):
         rpc_methods = []
@@ -140,7 +141,8 @@ class ProtoBuilder:
                 self.import_packages.add("""import "google/protobuf/wrappers.proto";""")
                 type_name = _wrapper_types[field.annotation]
                 fields.append(field_template.format(type=type_name, name=name, index=index))
-            elif origin := get_origin(field.annotation):
+            elif get_origin(field.annotation):
+                origin = get_origin(field.annotation)
                 if origin not in {list, List}:
                     raise NotImplementedError(f"Unsupported type {field.annotation}")
                 type_arg = get_args(field.annotation)[0]

@@ -1,31 +1,31 @@
 [tool.poetry]
 name = "python-fast-grpc"
-version = "0.1.0"
+version = "0.1.1"
 description = "fast to code grpc in python"
 authors = ["taogeYT <li_yatao@outlook.com>"]
 readme = "README.md"
 packages = [{include = "fast_grpc"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.7"
+protobuf = "^4.22.0"
 grpcio = "^1.53.0"
-pydantic = "^1.10.7"
-protobuf = "^4.22.3"
-mypy-protobuf = "^3.4.0"
-grpcio-tools = "^1.54.0"
+grpcio-tools = "^1.53.0"
+pydantic = "^1.10.0"
 logzero = "^1.7.0"
-blinker = "^1.6.2"
+blinker = "^1.6.1"
 
 [tool.poetry.dev-dependencies]
-isort = "^5.10.1"
+isort = "^5.10.0"
 black = "^22.3.0"
 flake8 = "^4.0"
 mypy = "^0.931"
+mypy-protobuf = "^3.4.0"
 pytest = "^7.1.2"
 pytest-asyncio = "^0.18.3"
+ipython = "^6.5.0"
 types-toml = "^0.10.8"
 types-requests = "^2.28.11"
-ipython = "^8.12.0"
 types-protobuf = "3.20.4.1"
 
 
@@ -34,7 +34,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.7"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 allow_redefinition = true
@@ -47,7 +47,7 @@ warn_unused_ignores = true
 warn_unreachable = true
 
 [tool.black]
-target-version = [ "py39" ]
+target-version = [ "py37" ]
 line-length = 120
 skip-numeric-underscore-normalization = true
 exclude = 'dist|build|\.venv|\.git|\.mypy_cache'
