@@ -190,7 +190,7 @@ def protoc_compile(name, proto_path=".", python_out=".", grpc_python_out="."):
         f"--proto_path={proto_path}",
         f"--python_out={python_out}",
         f"--grpc_python_out={grpc_python_out}",
-        f"--mypy_out={python_out}",
+        # f"--mypy_out={python_out}",
         "-I.",
         name,
     ]
