@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "python-fast-grpc"
 version = "0.1.3"
-description = "fast to code grpc in python"
+description = "Fast to Code gRPC in Python"
 authors = ["taogeYT <li_yatao@outlook.com>"]
 readme = "README.md"
 packages = [{include = "fast_grpc"}]
