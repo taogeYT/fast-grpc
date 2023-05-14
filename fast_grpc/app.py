@@ -20,8 +20,8 @@ class FastGRPC(object):
         default_service_name: str = "FastGRPC",
         middleware: Optional[Sequence[Middleware]] = None,
     ):
-        self.default_service_name = default_service_name
-        self.service = Service(service_name=self.default_service_name)
+        self.default_service = type(default_service_name, (object,), {})
+        self.service = Service(self.default_service)
 
         self.rpc_startup_funcs: List[Callable[..., Any]] = []
         self.rpc_shutdown_funcs: List[Callable[..., Any]] = []
@@ -99,5 +99,8 @@ class FastGRPC(object):
             app = cls(app=app, **options)
         return app
 
-    async def __call__(self, request, context, handler):
-        return await self.middleware_stack(request, context, handler)
+    async def __call__(self, request, context):
+        return await self.middleware_stack(request, context)
+
+    def add_service(self, service):
+        pass

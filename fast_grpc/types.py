@@ -3,15 +3,14 @@ from enum import IntEnum as _IntEnum
 from typing import TYPE_CHECKING, Awaitable, Callable, Generic, Optional, TypeVar
 
 from google.protobuf.message import Message
-from grpc.aio import ServicerContext
 from logzero import logger
 from pydantic import ConstrainedInt
 from pydantic.generics import GenericModel
 
 from fast_grpc.base import BaseSchema
+from fast_grpc.context import ServicerContext
 
-Handler = Callable[[BaseSchema, ServicerContext], Awaitable[BaseSchema]]
-App = Callable[[Message, ServicerContext, Handler], Awaitable[Message]]
+App = Callable[[Message, ServicerContext], Awaitable[Message]]
 
 if TYPE_CHECKING:
     Uint32 = int
