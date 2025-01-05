@@ -9,8 +9,9 @@ class ServicerContext:
 
 
 class ServiceContext:
-    def __init__(self, grpc_context: grpc.ServicerContext, method_descriptor):
+    def __init__(self, grpc_context: grpc.ServicerContext, method, method_descriptor):
         self.grpc_context = grpc_context
+        self.service_method = method
         self.input_type = method_descriptor.input_type._concrete_class
         self.output_type = method_descriptor.output_type._concrete_class
 

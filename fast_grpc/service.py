@@ -299,7 +299,7 @@ class Service:
 def make_grpc_service_from_methods(pb2, service_name, interface_class, methods: Dict[str, MethodType]):
     def create_method(method: MethodType, method_descriptor):
         async def service_method(self, request, context):
-            srv_context = ServiceContext(context, method_descriptor)
+            srv_context = ServiceContext(context, method, method_descriptor)
             return await method.handle(request, srv_context)
 
         service_method.__name__ = method.name
@@ -331,3 +331,11 @@ def add_service_to_server(name, proto, services: typing.List[Service], server):
     pb2_grpc_add_func(grpc_service(), server)
     logger.info(f"Service add_service_to_server {name=} {proto=}")
     return None
+
+
+class Servicer:
+
+    @classmethod
+    def as_service(cls, proto: typing.Optional[str] = None):
+        srv = Service(name=cls.__name__, proto=proto)
+        pass

@@ -34,7 +34,7 @@ class FastGRPC(object):
 
     def unary_unary(
         self,
-        name: str,
+        name: Optional[str] = None,
         *,
         request_model: Optional[Type[BaseModel]] = None,
         response_model: Optional[Type[BaseModel]] = None,
