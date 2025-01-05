@@ -191,13 +191,10 @@ def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
         raise FileNotFoundError(f"Proto file or directory '{proto_name}' not found")
     proto_dir = os.path.dirname(proto_name) if os.path.isfile(proto_name) else proto_name
     proto_files = [os.path.join(proto_dir, f) for f in os.listdir(proto_dir) if f.endswith(".proto")]
-    proto_include = protoc.pkg_resources.resource_filename("grpc_tools", "_proto")
     protoc_args = [
-        # f"--proto_path={proto_dir}",
         f"--python_out={python_out}",
         f"--grpc_python_out={grpc_python_out}",
         # f"--mypy_out={python_out}",
-        "-I{}".format(proto_include),
         "-I.",
     ]
     for file in proto_files:
