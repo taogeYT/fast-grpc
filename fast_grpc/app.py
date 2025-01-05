@@ -1,44 +1,57 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import inspect
-from typing import Any, Callable, List, Optional, Sequence, Type
+import collections
+from typing import Any, Callable, List, Optional, Type, TypeVar
 
 import grpc
 from grpc.aio._typing import ChannelArgumentType  # noqa
 from logzero import logger
 from pydantic import BaseModel
 
-from fast_grpc.middleware import Middleware
-from fast_grpc.middleware.base import BaseRPCMiddleware
-from fast_grpc.service import Service
+from fast_grpc.service import Service, UnaryUnaryMethod, add_service_to_server
+
+
+T = TypeVar('T')
+R = TypeVar('R')
 
 
 class FastGRPC(object):
-    def __init__(
-        self,
-        default_service_name: Optional[str] = None,
-        middleware: Optional[Sequence[Middleware]] = None,
-    ):
-        self.services = []
-        if default_service_name:
-            self.default_service = Service(type(default_service_name, (object,), {}))
-            self.services.append(self.default_service)
-        else:
-            self.default_service = None
+    def __init__(self, name: str = "FastGRPC", proto: str="fast_grpc.proto"):
+        self.proto = proto
+        self.service = Service(name=name, proto=proto)
+        self.services: List[Service] = [self.service]
         self.rpc_startup_funcs: List[Callable[..., Any]] = []
         self.rpc_shutdown_funcs: List[Callable[..., Any]] = []
-        self.user_middleware: List[Middleware] = [] if middleware is None else list(middleware)
 
     def setup(self) -> None:
         # build proto
-        for service in self.services:
-            service.gen_and_compile_proto()
+        # for service in self.services:
+        #     service.gen_and_compile_proto()
+        pass
 
     def on_startup(self, func: Callable[..., None]):
         self.rpc_startup_funcs.append(func)
 
-    def add_middleware(self, middleware_class: type, **options: Any) -> None:
-        self.user_middleware.insert(0, Middleware(middleware_class, **options))
+    def unary_unary(
+        self,
+        name: str,
+        *,
+        request_model: Optional[Type[BaseModel]] = None,
+        response_model: Optional[Type[BaseModel]] = None,
+        description: str = ""
+    ):
+        def decorator(endpoint: Callable[[T], R]) -> Callable[[T], R]:
+            self.service.add_method(
+                name=name,
+                endpoint=endpoint,
+                method_class=UnaryUnaryMethod,
+                request_model=request_model,
+                response_model=response_model,
+                description=description
+            )
+            return endpoint
+
+        return decorator
 
     def run(
         self,
@@ -69,38 +82,26 @@ class FastGRPC(object):
         maximum_concurrent_rpcs: Optional[int] = None,
         compression: Optional[grpc.Compression] = None,
     ) -> None:
-        def build_middleware_stack(app):
-            middleware = [Middleware(BaseRPCMiddleware)]
-            for cls, options in middleware:
-                app = cls(app=app, **options)
-            return app
-
-        self.setup()
-        for handler in self.rpc_startup_funcs:
-            if inspect.iscoroutinefunction(handler):
-                await handler()
-            else:
-                handler()
         server = grpc.aio.server(
             options=options,
             maximum_concurrent_rpcs=maximum_concurrent_rpcs,
             compression=compression,
         )
-        for service in self.services:
-            service.bind_server(server, build_middleware_stack(service))
+        self._register_service_to_server(server)
         logger.info(f"Running grpc on {host}:{port}")
         server.add_insecure_port(f"{host}:{port}")
         await server.start()
         await server.wait_for_termination()
 
-    def add_method(self, name, *, request_model: Type[BaseModel], response_model: Type[BaseModel]) -> Callable:
-        def decorator(func: Callable) -> Callable:
-            if self.default_service is None:
-                raise ValueError("Need set default_service_name")
-            self.default_service.add_rpc_method(name, func, request_model=request_model, response_model=response_model)
-            return func
+    def add_service(self, service: Service):
+        if service.proto is None:
+            service.proto = self.proto
+        self.services.append(service)
 
-        return decorator
+    def _register_service_to_server(self, server):
+        _services = collections.defaultdict(list)
+        for service in self.services:
+            _services[(service.name, service.proto)].append(service)
 
-    def add_service(self, servicer):
-        self.services.append(Service(servicer))
+        for (name, proto), values in _services.items():
+            add_service_to_server(name, proto, values, server)

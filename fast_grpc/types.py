@@ -10,6 +10,9 @@ from pydantic.generics import GenericModel
 from fast_grpc.base import BaseSchema
 from fast_grpc.context import ServicerContext
 
+Request = TypeVar('Request')
+Response = TypeVar('Response')
+
 App = Callable[[Message, ServicerContext], Awaitable[Message]]
 
 if TYPE_CHECKING:
