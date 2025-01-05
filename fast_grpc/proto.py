@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import datetime
+import os.path
 from collections import deque
 from enum import IntEnum
 from typing import List, Set, Type, Union
 
 from grpc_tools import protoc
+from logzero import logger
 from pydantic import BaseModel
 from typing_extensions import get_args, get_origin
 
@@ -181,21 +183,26 @@ class ProtoBuilder:
         )
 
 
-def protoc_compile(name, proto_path=".", python_out=".", grpc_python_out="."):
+def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
     """
     python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. -I. demo.proto
     """
+    if not os.path.exists(proto_name):
+        raise FileNotFoundError(f"Proto file or directory '{proto_name}' not found")
+    proto_dir = os.path.dirname(proto_name) if os.path.isfile(proto_name) else proto_name
+    proto_files = [os.path.join(proto_dir, f) for f in os.listdir(proto_dir) if f.endswith(".proto")]
     proto_include = protoc.pkg_resources.resource_filename("grpc_tools", "_proto")
     protoc_args = [
-        f"--proto_path={proto_path}",
+        # f"--proto_path={proto_dir}",
         f"--python_out={python_out}",
         f"--grpc_python_out={grpc_python_out}",
         # f"--mypy_out={python_out}",
+        "-I{}".format(proto_include),
         "-I.",
-        name,
     ]
-    protoc_args += ["-I{}".format(proto_include)]
+    for file in proto_files:
+        protoc_args.append(file)
     status_code = protoc.main(protoc_args)
-
     if status_code != 0:
-        raise NotImplementedError("Protobuf compilation failed")
+        raise RuntimeError("Protobuf compilation failed")
+    logger.info(f"Compiled {proto_name} successfully")

@@ -2,10 +2,16 @@
 import asyncio
 import contextvars
 import functools
+import importlib.util
 import os
 import re
 import sys
+import inspect
 from importlib import import_module
+from typing import Any, Callable, Optional, List, Dict
+
+from google.protobuf.json_format import MessageToDict, Parse, ParseDict
+from pydantic.typing import ForwardRef, evaluate_forwardref
 
 
 def import_string(dotted_path):
@@ -75,3 +81,80 @@ def await_sync_function(func):
         return await loop.run_in_executor(None, context.run, args)
 
     return wrapper
+
+
+def load_model_from_file_location(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    proto_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(proto_module)
+    return proto_module
+
+
+def import_proto_file(proto_file_path):
+    # 获取 proto 文件的基础名称，去掉扩展名
+    base_name = os.path.splitext(os.path.basename(proto_file_path))[0]
+
+    # 拼接生成的 Python 文件路径，假设生成的文件名为 base_name_pb2.py
+    pb2_file_path = os.path.join(os.path.dirname(proto_file_path), f"{base_name}_pb2.py")
+    pb2_grpc_file_path = os.path.join(os.path.dirname(proto_file_path), f"{base_name}_pb2_grpc.py")
+
+    # 检查生成的 Python 文件是否存在
+    if not os.path.exists(pb2_file_path):
+        raise FileNotFoundError(f"生成的 pb2 文件 {pb2_file_path} 不存在。")
+    if not os.path.exists(pb2_grpc_file_path):
+        raise FileNotFoundError(f"生成的 pb2 文件 {pb2_grpc_file_path} 不存在。")
+
+    # 动态加载模块
+    _pb2 = load_model_from_file_location(f"{base_name}_pb2.py", pb2_file_path)
+    _pb2_grpc = load_model_from_file_location(f"{base_name}_pb2_grpc.py", pb2_grpc_file_path)
+
+    return _pb2, _pb2_grpc
+
+
+def message_to_dict(message):
+    return MessageToDict(message, including_default_value_fields=True, preserving_proto_field_name=True)
+
+
+def json_to_message(data, message_cls):
+    return Parse(data, message_cls(), ignore_unknown_fields=True)
+
+
+def dict_to_message(data, message_cls):
+    return ParseDict(data, message_cls(), ignore_unknown_fields=True)
+
+
+def get_typed_annotation(param: inspect.Parameter, _globals: Dict[str, Any]) -> Any:
+    annotation = param.annotation
+    if isinstance(annotation, str):
+        annotation = ForwardRef(annotation)
+        annotation = evaluate_forwardref(annotation, _globals, _globals)
+    return annotation
+
+
+def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:
+    signature = inspect.signature(call)
+    _globals = getattr(call, "__globals__", {})
+    typed_params = [
+        inspect.Parameter(
+            name=param.name,
+            kind=param.kind,
+            default=param.default,
+            annotation=get_typed_annotation(param, _globals),
+        )
+        for param in signature.parameters.values()
+    ]
+    typed_signature = inspect.Signature(typed_params, return_annotation=signature.return_annotation)
+    return typed_signature
+
+
+def to_pascal_case(snake_str: str) -> str:
+    """
+    Convert a snake_case string to PascalCase.
+
+    Args:
+        snake_str (str): The snake_case string to convert.
+
+    Returns:
+        str: The PascalCase version of the string.
+    """
+    return ''.join(x.capitalize() for x in snake_str.split('_'))
