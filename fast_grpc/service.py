@@ -8,7 +8,7 @@ import grpc
 from abc import ABC, abstractmethod
 
 from fast_grpc.context import ServiceContext
-from fast_grpc.proto import protoc_compile
+from fast_grpc.utils import protoc_compile
 from fast_grpc.types import Request, Response
 from fast_grpc.utils import message_to_dict, dict_to_message, import_proto_file, get_typed_signature, to_pascal_case
 
@@ -315,10 +315,10 @@ def make_grpc_service_from_methods(pb2, service_name, interface_class, methods: 
     )
 
 
-def add_service_to_server(name, proto, services: typing.List[Service], server):
-    methods = {}
-    for srv in services:
-        methods.update(srv.methods)
+def add_service_to_server(service: Service, server):
+    name = service.name
+    proto = service.proto
+    methods = service.methods
     if not methods:
         logger.info(f"Service add_service_to_server {name=} {proto=} [Ignored] -> no methods")
         return None
