@@ -18,10 +18,11 @@ R = TypeVar('R')
 class FastGRPC(object):
     def __init__(self, name: str = "FastGRPC", proto: str="fast_grpc.proto"):
         self.proto = proto
-        self.service = Service(name=name, proto=proto)
-        self.services: List[Service] = [self.service]
+        self._services: dict[str, Service] = {}
         self.rpc_startup_funcs: List[Callable[..., Any]] = []
         self.rpc_shutdown_funcs: List[Callable[..., Any]] = []
+        self.service = Service(name=name, proto=proto)
+        self.add_service(self.service)
 
     def setup(self) -> None:
         # build proto
@@ -96,12 +97,11 @@ class FastGRPC(object):
     def add_service(self, service: Service):
         if service.proto is None:
             service.proto = self.proto
-        self.services.append(service)
+        path_name = f"{service.proto}.{service.name}"
+        if path_name not in self._services:
+            self._services[path_name] = Service(name=service.name, proto=service.proto)
+        self._services[path_name].methods.update(service.methods)
 
     def _register_service_to_server(self, server):
-        _services = collections.defaultdict(list)
-        for service in self.services:
-            _services[(service.name, service.proto)].append(service)
-
-        for (name, proto), values in _services.items():
-            add_service_to_server(name, proto, values, server)
+        for service in self._services.values():
+            add_service_to_server(service, server)

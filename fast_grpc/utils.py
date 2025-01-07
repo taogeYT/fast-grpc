@@ -11,6 +11,8 @@ from importlib import import_module
 from typing import Any, Callable, Optional, List, Dict
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
+from grpc_tools import protoc
+from logzero import logger
 from pydantic.typing import ForwardRef, evaluate_forwardref
 
 
@@ -158,3 +160,25 @@ def to_pascal_case(snake_str: str) -> str:
         str: The PascalCase version of the string.
     """
     return ''.join(x.capitalize() for x in snake_str.split('_'))
+
+
+def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
+    """
+    python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. -I. demo.proto
+    """
+    if not os.path.exists(proto_name):
+        raise FileNotFoundError(f"Proto file or directory '{proto_name}' not found")
+    proto_dir = os.path.dirname(proto_name) if os.path.isfile(proto_name) else proto_name
+    proto_files = [os.path.join(proto_dir, f) for f in os.listdir(proto_dir) if f.endswith(".proto")]
+    protoc_args = [
+        f"--python_out={python_out}",
+        f"--grpc_python_out={grpc_python_out}",
+        # f"--mypy_out={python_out}",
+        "-I.",
+    ]
+    for file in proto_files:
+        protoc_args.append(file)
+    status_code = protoc.main(protoc_args)
+    if status_code != 0:
+        raise RuntimeError("Protobuf compilation failed")
+    logger.info(f"Compiled {proto_name} successfully")
