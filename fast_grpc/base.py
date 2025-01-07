@@ -10,3 +10,7 @@ class BaseSchema(BaseModel):
         json_encoders = {
             datetime.datetime: lambda v: int(v.timestamp()),
         }
+
+
+class EmptySchema(BaseModel):
+    pass

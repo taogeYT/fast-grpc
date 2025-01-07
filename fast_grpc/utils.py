@@ -5,15 +5,16 @@ import functools
 import importlib.util
 import os
 import re
+import subprocess
 import sys
 import inspect
 from importlib import import_module
-from typing import Any, Callable, Optional, List, Dict
+from typing import Any, Callable, Dict
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
-from grpc_tools import protoc
 from logzero import logger
-from pydantic.typing import ForwardRef, evaluate_forwardref
+from typing import ForwardRef
+from pydantic._internal._typing_extra import try_eval_type as evaluate_forwardref
 
 
 def import_string(dotted_path):
@@ -171,6 +172,9 @@ def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
     proto_dir = os.path.dirname(proto_name) if os.path.isfile(proto_name) else proto_name
     proto_files = [os.path.join(proto_dir, f) for f in os.listdir(proto_dir) if f.endswith(".proto")]
     protoc_args = [
+        sys.executable,
+        "-m",
+        "grpc_tools.protoc",
         f"--python_out={python_out}",
         f"--grpc_python_out={grpc_python_out}",
         # f"--mypy_out={python_out}",
@@ -178,7 +182,8 @@ def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
     ]
     for file in proto_files:
         protoc_args.append(file)
-    status_code = protoc.main(protoc_args)
+    status_code = subprocess.call(protoc_args)
     if status_code != 0:
+        logger.error(f"Command `{' '.join(protoc_args)}` [Err] {status_code=}")
         raise RuntimeError("Protobuf compilation failed")
     logger.info(f"Compiled {proto_name} successfully")

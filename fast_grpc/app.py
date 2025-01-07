@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import collections
+import os.path
 from typing import Any, Callable, List, Optional, Type, TypeVar
 
 import grpc
@@ -8,8 +9,9 @@ from grpc.aio._typing import ChannelArgumentType  # noqa
 from logzero import logger
 from pydantic import BaseModel
 
+from fast_grpc.proto import render_proto_file, ProtoBuilder
 from fast_grpc.service import Service, UnaryUnaryMethod, add_service_to_server
-
+from fast_grpc.utils import protoc_compile
 
 T = TypeVar('T')
 R = TypeVar('R')
@@ -18,17 +20,28 @@ R = TypeVar('R')
 class FastGRPC(object):
     def __init__(self, name: str = "FastGRPC", proto: str="fast_grpc.proto"):
         self.proto = proto
-        self._services: dict[str, Service] = {}
         self.rpc_startup_funcs: List[Callable[..., Any]] = []
         self.rpc_shutdown_funcs: List[Callable[..., Any]] = []
         self.service = Service(name=name, proto=proto)
-        self.add_service(self.service)
+        self._services: dict[str, Service] = {f"{proto}:{name}": self.service}
 
     def setup(self) -> None:
-        # build proto
-        # for service in self.services:
-        #     service.gen_and_compile_proto()
-        pass
+        builders = {}
+        for service in self._services.values():
+            if service.proto not in builders:
+                builders[service.proto] = ProtoBuilder(proto_path=service.proto)
+            builders[service.proto].add_service(service)
+        for proto, builder in builders.items():
+            proto_define = builder.get_proto()
+            content = render_proto_file(proto_define)
+            if not os.path.exists(proto):
+                directory = os.path.dirname(proto)
+                os.makedirs(directory, exist_ok=True)
+                with open(proto, "w") as f:
+                    f.write(content)
+            else:
+                logger.info(f"FastGRPC setup proto file {proto} [Skip] -> proto exists")
+            protoc_compile(proto)
 
     def on_startup(self, func: Callable[..., None]):
         self.rpc_startup_funcs.append(func)
@@ -62,7 +75,6 @@ class FastGRPC(object):
         maximum_concurrent_rpcs: Optional[int] = None,
         compression: Optional[grpc.Compression] = None,
     ) -> None:
-        # asyncio.run(self.run_async(host=host, port=port))
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
             self.run_async(
@@ -83,6 +95,7 @@ class FastGRPC(object):
         maximum_concurrent_rpcs: Optional[int] = None,
         compression: Optional[grpc.Compression] = None,
     ) -> None:
+        self.setup()
         server = grpc.aio.server(
             options=options,
             maximum_concurrent_rpcs=maximum_concurrent_rpcs,
@@ -97,7 +110,7 @@ class FastGRPC(object):
     def add_service(self, service: Service):
         if service.proto is None:
             service.proto = self.proto
-        path_name = f"{service.proto}.{service.name}"
+        path_name = f"{service.proto}:{service.name}"
         if path_name not in self._services:
             self._services[path_name] = Service(name=service.name, proto=service.proto)
         self._services[path_name].methods.update(service.methods)

@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING, Awaitable, Callable, Generic, Optional, TypeVa
 
 from google.protobuf.message import Message
 from logzero import logger
-from pydantic import ConstrainedInt
+from pydantic import conint
 from pydantic.generics import GenericModel
+from pydantic import BaseModel
 
 from fast_grpc.base import BaseSchema
 from fast_grpc.context import ServicerContext
@@ -15,38 +16,16 @@ Response = TypeVar('Response')
 
 App = Callable[[Message, ServicerContext], Awaitable[Message]]
 
-if TYPE_CHECKING:
-    Uint32 = int
-    Uint64 = int
-    Int32 = int
-    Int64 = int
-    Double = float
-else:
-
-    class Uint32(ConstrainedInt):
-        ge = 0
-        lt = 2**32
-
-    class Uint64(ConstrainedInt):
-        ge = 0
-        lt = 2**64
-
-    class Int32(ConstrainedInt):
-        ge = -(2**31)
-        lt = 2**31
-
-    class Int64(ConstrainedInt):
-        ge = -(2**63)
-        lt = 2**31
-
-    class Double(float):
-        pass
-
+Uint32 = conint(ge=0, lt=2**32)
+Uint64 = conint(ge=0, lt=2**64)
+Int32 = conint(ge=-(2**31), lt=2**31)
+Int64 = conint(ge=-(2**63), lt=2**63)
+Double = float
 
 T = TypeVar("T", bytes, int, str, bool, float, Uint32, Uint64, Int32, Int64, Double)
 
 
-class WrapperValue(GenericModel, Generic[T]):
+class WrapperValue(BaseModel, Generic[T]):
     value: T
 
 

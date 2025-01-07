@@ -322,7 +322,6 @@ def add_service_to_server(service: Service, server):
     if not methods:
         logger.info(f"Service add_service_to_server {name=} {proto=} [Ignored] -> no methods")
         return None
-    protoc_compile(proto)
     interface_name = f"{name}Servicer"
     pb2, pb2_grpc = import_proto_file(proto)
     interface_class = getattr(pb2_grpc, interface_name)

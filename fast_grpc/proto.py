@@ -3,13 +3,15 @@ import datetime
 import os.path
 from collections import deque
 from enum import IntEnum
-from typing import List, Set, Type, Union
+from operator import index
+from typing import List, Set, Type, Union, Iterable, Sequence, Any
 
-from grpc_tools import protoc
-from logzero import logger
 from pydantic import BaseModel
 from typing_extensions import get_args, get_origin
+from jinja2 import Template
 
+from fast_grpc.service import Service
+from fast_grpc.base import EmptySchema
 from fast_grpc.types import (
     BoolValue,
     BytesValue,
@@ -56,150 +58,168 @@ _wrapper_types = {
     UInt64Value: "google.protobuf.UInt64Value",
 }
 
-rpc_template = """rpc {name}({request}) returns ({response}) {{}}
-"""
-field_template = """{type} {name} = {index};"""
-message_template = """
-message {name} {{
-    {content}
-}}
-"""
+# 定义 Jinja2 模板
+PROTO_TEMPLATE = """
+syntax = "proto3";
 
-member_template = """{name} = {index};"""
-enum_template = """
-enum {name} {{
-    {content}
-}}
-"""
+package {{ proto_define.package }};
 
-proto_template = """syntax = "proto3";
+{% for service in proto_define.services %}
+service {{ service.name }} {
+    {% for method in service.methods -%}
+    rpc {{ method.name }} ({{ method.request }}) returns ({{ method.response }});
+    {%- if not loop.last %}
+    {% endif %}
+    {%- endfor %}
+}
+{% endfor %}
+{% for enum in proto_define.enums.values() %}
+enum {{ enum.name }} {
+    {% for field in enum.fields -%}
+    {{ field.name }} = {{ field.index }};
+    {%- if not loop.last %}
+    {% endif %}
+    {%- endfor %}
+}
+{% endfor %}
+{% for message in proto_define.messages.values() %}
+message {{ message.name }} {
+    {% for field in message.fields -%}
+    {{ field.type }} {{ field.name }} = {{ field.index }};
+    {%- if not loop.last %}
+    {% endif %}
+    {%- endfor %}
+}
+{% endfor %}
+""".strip()
 
-package {package_name};
-{import_package}
 
-service {service_name} {{
-    {rpc_content}
-}}
+class ProtoField(BaseModel):
+    name: str
+    index: int
+    type: str = ""
+
+    @property
+    def proto_string(self):
+        return f'{self.type} {self.name} = {self.index}'.strip()
 
 
-// struct definition.
-{message_content}
-"""
+class ProtoStruct(BaseModel):
+    name: str
+    fields: list[ProtoField]
+
+
+class ProtoMethod(BaseModel):
+    name: str
+    request: str
+    response: str
+
+
+class ProtoService(BaseModel):
+    name: str
+    methods: list[ProtoMethod]
+
+
+class ProtoDefine(BaseModel):
+    package: str
+    services: list[ProtoService]
+    messages: dict[Any, ProtoStruct]
+    enums: dict[Any, ProtoStruct]
+
+
+def generate_type_name(type_: type) -> str:
+    """Generate a name for generic type by combining base name and type arguments.
+    Example: Response[User] -> UserResponse
+            Page[User] -> UserPage
+            NestedResponse[User, DataList] -> UserDataListNestedResponse
+    """
+    if not isinstance(type_, type):
+        raise ValueError(f"'{type_}' must be a type")
+    origin = get_origin(type_)
+    args = get_args(type_)
+    if origin is None:
+        if issubclass(type_, BaseModel):
+            metadata = type_.__pydantic_generic_metadata__
+            args = metadata['args']
+            origin = metadata['origin'] or type_
+            type_names = [generate_type_name(t) for t in args]
+            return ''.join(type_names + [origin.__name__])
+        if issubclass(type_, IntEnum):
+            return type_.__name__
+        if not issubclass(type_, tuple(_base_types)):
+            raise ValueError(f"Unsupported type: {type_}")
+        return type_.__name__.capitalize()
+    else:
+        if issubclass(origin, Sequence):
+            return f"{generate_type_name(args[0])}List"
+        if issubclass(origin, (dict,)):
+            return f"{generate_type_name(args[0])}{generate_type_name(args[1])}Dict"
+        raise ValueError(f"Unsupported type: {type_}")
 
 
 class ProtoBuilder:
-    def __init__(self, service):
-        from fast_grpc.service import Service
+    def __init__(self, proto_path: str, package: str = ""):
+        if not package:
+            file_name = os.path.basename(proto_path)
+            package = os.path.splitext(file_name)[0]
+        self._proto_define = ProtoDefine(package=package, services=[], messages={}, enums={})
 
-        self.service: Service = service
-        self.queue: deque[Union[Type[BaseModel], Type[IntEnum]]] = deque()
-        self.messages: Set[Union[Type[BaseModel], Type[IntEnum]]] = set()
+    def add_service(self, service: Service):
+        srv = ProtoService(name=service.name, methods=[])
+        self._proto_define.services.append(srv)
+        for name, method in service.methods.items():
+            request = self.convert_message(method.request_model or EmptySchema)
+            response = self.convert_message(method.response_model or EmptySchema)
+            srv.methods.append(ProtoMethod(name=name, request=request.name, response=response.name))
+        return self
 
-        self.import_packages: Set[str] = set()
+    def get_proto(self):
+        return self._proto_define
 
-    def create(self):
-        rpc_methods = []
-        message_contents = []
-        for method in self.service.methods:
-            rpc_methods.append(
-                rpc_template.format(
-                    name=method.name,
-                    request=method.request_model.__name__,
-                    response=method.response_model.__name__,
-                )
-            )
-            message_contents.append(self.to_protobuf_struct(method.request_model))
-            message_contents.append(self.to_protobuf_struct(method.response_model))
-        while self.queue:
-            schema = self.queue.popleft()
-            if schema not in self.messages:
-                message_contents.append(self.to_protobuf_struct(schema))
-        return proto_template.format(
-            package_name=self.service.package_name,
-            import_package="".join(self.import_packages),
-            service_name=self.service.service_name,
-            rpc_content="".join(rpc_methods),
-            message_content="".join(message_contents),
-        )
+    def convert_message(self, schema: Type[BaseModel]) -> ProtoStruct:
+        if schema in self._proto_define.messages:
+            return self._proto_define.messages[schema]
+        message = ProtoStruct(name=generate_type_name(schema), fields=[])
+        for i, (name, field) in enumerate(schema.model_fields.items(), 1):
+            type_name = self._get_type_name(field.annotation)
+            message.fields.append(ProtoField(name=name, type=type_name, index=i))
+        self._proto_define.messages[schema] = message
+        return message
 
-    def to_protobuf_struct(self, schema: Union[Type[BaseModel], Type[IntEnum]]):
-        if issubclass(schema, IntEnum):
-            return self.to_protobuf_enum(schema)
-        if issubclass(schema, BaseModel):
-            return self.to_protobuf_message(schema)
-        raise NotImplementedError(f"Unsupported type {schema}")
+    def convert_enum(self, schema: Type[IntEnum]):
+        if schema in self._proto_define.enums:
+            return self._proto_define.enums[schema]
+        enum_struct = ProtoStruct(name=schema.__name__, fields=[ProtoField(name=member.name, index=member.value) for member in schema])
+        self._proto_define.enums[schema] = enum_struct
+        return enum_struct
 
-    def to_protobuf_message(self, schema: Type[BaseModel]):
-        """
-        message HelloReply {
-          string message = 1;
-        }
-        """
-        fields = []
-        index = 0
-        for name, field in schema.__fields__.items():
-            index += 1
-            if field.annotation in _wrapper_types:
-                self.import_packages.add("""import "google/protobuf/wrappers.proto";""")
-                type_name = _wrapper_types[field.annotation]
-                fields.append(field_template.format(type=type_name, name=name, index=index))
-            elif get_origin(field.annotation):
-                origin = get_origin(field.annotation)
-                if origin not in {list, List}:
-                    raise NotImplementedError(f"Unsupported type {field.annotation}")
-                type_arg = get_args(field.annotation)[0]
-                if type_arg in _wrapper_types:
-                    self.import_packages.add("""import "google/protobuf/wrappers.proto";""")
-                    type_name = _wrapper_types[type_arg]
-                    fields.append(field_template.format(type=f"repeated {type_name}", name=name, index=index))
-                else:
-                    if get_origin(type_arg):
-                        raise NotImplementedError(f"Unsupported type {field.annotation}")
-                    if type_arg in _base_types:
-                        type_name = _base_types[type_arg]
-                    elif issubclass(type_arg, BaseModel):
-                        self.queue.append(type_arg)
-                        type_name = type_arg.__name__
-                    else:
-                        raise NotImplementedError(f"Unsupported type {field.annotation}")
-                    fields.append(field_template.format(type=f"repeated {type_name}", name=name, index=index))
-            else:
-                if field.annotation in _base_types:
-                    type_name = _base_types[field.annotation]
-                elif issubclass(field.type_, BaseModel) or issubclass(field.type_, IntEnum):
-                    self.queue.append(field.type_)
-                    type_name = field.type_.__name__
-                else:
-                    raise NotImplementedError(f"Unsupported type {field.annotation}")
-                fields.append(field_template.format(type=type_name, name=name, index=index))
-        self.messages.add(schema)
-        return message_template.format(name=schema.__name__, content="".join(fields))
-
-    def to_protobuf_enum(self, schema: Type[IntEnum]):
-        self.messages.add(schema)
-        return enum_template.format(
-            name=schema.__name__,
-            content="".join(member_template.format(name=member.name, index=member.value) for member in schema),
-        )
+    def _get_type_name(self, type_: type) -> str:
+        origin = get_origin(type_)
+        args = get_args(type_)
+        if origin is None:
+            if issubclass(type_, BaseModel):
+                message = self.convert_message(type_)
+                return message.name
+            if issubclass(type_, IntEnum):
+                struct = self.convert_enum(type_)
+                return struct.name
+            if not issubclass(type_, tuple(_base_types)):
+                raise ValueError(f"Unsupported type: {type_}")
+            return _base_types[type_]
+        else:
+            if issubclass(origin, Sequence):
+                return f"repeated {self._get_type_name(args[0])}"
+            if issubclass(origin, (dict,)):
+                return f"map <{self._get_type_name(args[0])}, {self._get_type_name(args[1])}>"
+            raise ValueError(f"Unsupported type: {type_}")
 
 
-def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
-    """
-    python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. -I. demo.proto
-    """
-    if not os.path.exists(proto_name):
-        raise FileNotFoundError(f"Proto file or directory '{proto_name}' not found")
-    proto_dir = os.path.dirname(proto_name) if os.path.isfile(proto_name) else proto_name
-    proto_files = [os.path.join(proto_dir, f) for f in os.listdir(proto_dir) if f.endswith(".proto")]
-    protoc_args = [
-        f"--python_out={python_out}",
-        f"--grpc_python_out={grpc_python_out}",
-        # f"--mypy_out={python_out}",
-        "-I.",
-    ]
-    for file in proto_files:
-        protoc_args.append(file)
-    status_code = protoc.main(protoc_args)
-    if status_code != 0:
-        raise RuntimeError("Protobuf compilation failed")
-    logger.info(f"Compiled {proto_name} successfully")
+def render_proto_file(proto_define: ProtoDefine, proto_template=PROTO_TEMPLATE) -> str:
+    template = Template(proto_template)
+    return template.render(proto_define=proto_define)
+
+
+def save_proto_file(proto_define: ProtoDefine, proto_template=PROTO_TEMPLATE):
+    content = render_proto_file(proto_define=proto_define, proto_template=proto_template)
+    with open(proto_define.proto, "w") as f:
+        f.write(content)
