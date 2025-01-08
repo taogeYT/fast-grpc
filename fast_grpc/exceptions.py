@@ -2,7 +2,7 @@
 from typing import Optional
 
 import grpc
-from grpc._typing import MetadataType
+from fast_grpc.types import MetadataType
 
 
 class RPCException(grpc.RpcError):
@@ -25,7 +25,10 @@ class RPCException(grpc.RpcError):
 
 class Error(grpc.Status):
     def __init__(
-        self, code: grpc.StatusCode, details: Optional[str] = None, trailing_metadata: Optional[MetadataType] = None
+        self,
+        code: grpc.StatusCode,
+        details: Optional[str] = None,
+        trailing_metadata: Optional[MetadataType] = None,
     ):
         if details is None:
             details = code.value[1]

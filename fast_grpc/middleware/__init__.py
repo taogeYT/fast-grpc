@@ -1,18 +1,45 @@
 # -*- coding: utf-8 -*-
-import typing
+from __future__ import annotations
+
+from typing import List, Callable, Any, Union, AsyncIterator
+
+from google.protobuf.message import Message
+
+from fast_grpc.context import ServiceContext
+from fast_grpc.types import Method
 
 
-class Middleware:
-    def __init__(self, cls: type, **options: typing.Any) -> None:
-        self.cls = cls
-        self.options = options
+class BaseMiddleware:
+    async def __call__(
+        self,
+        method: Method,
+        request: Union[Message, AsyncIterator[Message]],
+        context: ServiceContext,
+    ) -> Any:
+        return method(request, context)
 
-    def __iter__(self) -> typing.Iterator:
-        as_tuple = (self.cls, self.options)
-        return iter(as_tuple)
 
-    def __repr__(self) -> str:
-        class_name = self.__class__.__name__
-        option_strings = [f"{key}={value!r}" for key, value in self.options.items()]
-        args_repr = ", ".join([self.cls.__name__] + option_strings)
-        return f"{class_name}({args_repr})"
+class MiddlewareManager:
+    def __init__(self, middlewares: List[BaseMiddleware]):
+        self._middleware: List[BaseMiddleware] = middlewares
+
+    def add_middleware(self, middleware: BaseMiddleware):
+        """添加中间件"""
+        self._middleware.append(middleware)
+
+    async def dispatch(
+        self,
+        handler: Callable,
+        request: Any,
+        context: ServiceContext,
+    ) -> Any:
+        async def execute_middleware(index: int) -> Any:
+            if index >= len(self._middleware):
+                return await handler(request, context)
+
+            middleware = self._middleware[index]
+            return await middleware(
+                lambda req, ctx: execute_middleware(index + 1), request, context
+            )
+
+        return await execute_middleware(0)
