@@ -1,0 +1,7 @@
+site_name: FastGRPC
+site_url: 'https://taogeYT.github.io/fast-grpc/'
+site_description: Fast to Code gRPC in Python
+repo_name: taogeYT/fast-grpc
+repo_url: https://github.com/taogeYT/fast-grpc
+theme:
+  name: 'material'
