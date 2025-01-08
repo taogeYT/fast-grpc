@@ -18,15 +18,18 @@ from fast_grpc.utils import protoc_compile
 class FastGRPC(object):
     def __init__(
         self,
-        proto: str = "fast_grpc.proto",
+        *,
         service_name: str = "FastGRPC",
+        proto: str = "fast_grpc.proto",
         middleware: Optional[Sequence[BaseMiddleware]] = None,
+        auto_gen_proto: bool = True,
     ):
         self.service = Service(name=service_name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{service_name}": self.service}
         _middleware = middleware if middleware else []
         _middleware.insert(0, BaseGRPCMiddleware())
         self._middleware_manager = MiddlewareManager(_middleware)
+        self._auto_gen_proto = auto_gen_proto
 
     def setup(self) -> None:
         builders = {}
@@ -37,13 +40,11 @@ class FastGRPC(object):
                 )
             builders[service.proto_path].add_service(service)
         for proto, builder in builders.items():
-            proto_define = builder.get_proto()
-            content = render_proto_file(proto_define)
-            if not proto.exists():
+            if self._auto_gen_proto:
+                proto_define = builder.get_proto()
+                content = render_proto_file(proto_define)
                 proto.parent.mkdir(parents=True, exist_ok=True)
                 proto.write_text(content)
-            else:
-                logger.info(f"FastGRPC setup proto file {proto} [Skip] -> proto exists")
             protoc_compile(proto)
 
     def add_middleware(self, middleware: BaseMiddleware) -> None:
