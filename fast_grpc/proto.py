@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
-import os.path
-from collections import deque
 from enum import IntEnum
-from operator import index
-from typing import List, Set, Type, Union, Iterable, Sequence, Any
+from typing import Type, Sequence, Any
 
 from pydantic import BaseModel
 from typing_extensions import get_args, get_origin
@@ -37,7 +34,7 @@ _base_types = {
     # Boolean
     bool: "bool",
     # Date and time
-    datetime.datetime: "int32",
+    datetime.datetime: "string",
     str: "string",
     Uint32: "uint32",
     Uint64: "uint64",
@@ -101,7 +98,7 @@ class ProtoField(BaseModel):
 
     @property
     def proto_string(self):
-        return f'{self.type} {self.name} = {self.index}'.strip()
+        return f"{self.type} {self.name} = {self.index}".strip()
 
 
 class ProtoStruct(BaseModel):
@@ -140,10 +137,10 @@ def generate_type_name(type_: type) -> str:
     if origin is None:
         if issubclass(type_, BaseModel):
             metadata = type_.__pydantic_generic_metadata__
-            args = metadata['args']
-            origin = metadata['origin'] or type_
+            args = metadata["args"]
+            origin = metadata["origin"] or type_
             type_names = [generate_type_name(t) for t in args]
-            return ''.join(type_names + [origin.__name__])
+            return "".join(type_names + [origin.__name__])
         if issubclass(type_, IntEnum):
             return type_.__name__
         if not issubclass(type_, tuple(_base_types)):
@@ -152,17 +149,16 @@ def generate_type_name(type_: type) -> str:
     else:
         if issubclass(origin, Sequence):
             return f"{generate_type_name(args[0])}List"
-        if issubclass(origin, (dict,)):
+        if issubclass(origin, dict):
             return f"{generate_type_name(args[0])}{generate_type_name(args[1])}Dict"
         raise ValueError(f"Unsupported type: {type_}")
 
 
 class ProtoBuilder:
-    def __init__(self, proto_path: str, package: str = ""):
-        if not package:
-            file_name = os.path.basename(proto_path)
-            package = os.path.splitext(file_name)[0]
-        self._proto_define = ProtoDefine(package=package, services=[], messages={}, enums={})
+    def __init__(self, package: str):
+        self._proto_define = ProtoDefine(
+            package=package, services=[], messages={}, enums={}
+        )
 
     def add_service(self, service: Service):
         srv = ProtoService(name=service.name, methods=[])
@@ -170,7 +166,9 @@ class ProtoBuilder:
         for name, method in service.methods.items():
             request = self.convert_message(method.request_model or EmptySchema)
             response = self.convert_message(method.response_model or EmptySchema)
-            srv.methods.append(ProtoMethod(name=name, request=request.name, response=response.name))
+            srv.methods.append(
+                ProtoMethod(name=name, request=request.name, response=response.name)
+            )
         return self
 
     def get_proto(self):
@@ -189,7 +187,12 @@ class ProtoBuilder:
     def convert_enum(self, schema: Type[IntEnum]):
         if schema in self._proto_define.enums:
             return self._proto_define.enums[schema]
-        enum_struct = ProtoStruct(name=schema.__name__, fields=[ProtoField(name=member.name, index=member.value) for member in schema])
+        enum_struct = ProtoStruct(
+            name=schema.__name__,
+            fields=[
+                ProtoField(name=member.name, index=member.value) for member in schema
+            ],
+        )
         self._proto_define.enums[schema] = enum_struct
         return enum_struct
 
@@ -209,7 +212,7 @@ class ProtoBuilder:
         else:
             if issubclass(origin, Sequence):
                 return f"repeated {self._get_type_name(args[0])}"
-            if issubclass(origin, (dict,)):
+            if issubclass(origin, dict):
                 return f"map <{self._get_type_name(args[0])}, {self._get_type_name(args[1])}>"
             raise ValueError(f"Unsupported type: {type_}")
 
@@ -220,6 +223,8 @@ def render_proto_file(proto_define: ProtoDefine, proto_template=PROTO_TEMPLATE) 
 
 
 def save_proto_file(proto_define: ProtoDefine, proto_template=PROTO_TEMPLATE):
-    content = render_proto_file(proto_define=proto_define, proto_template=proto_template)
+    content = render_proto_file(
+        proto_define=proto_define, proto_template=proto_template
+    )
     with open(proto_define.proto, "w") as f:
         f.write(content)

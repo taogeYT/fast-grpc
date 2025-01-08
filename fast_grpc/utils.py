@@ -9,12 +9,12 @@ import subprocess
 import sys
 import inspect
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Callable, Dict
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
 from logzero import logger
-from typing import ForwardRef
-from pydantic._internal._typing_extra import try_eval_type as evaluate_forwardref
+# from pydantic._internal._typing_extra import try_eval_type as evaluate_forwardref
 
 
 def import_string(dotted_path):
@@ -28,7 +28,10 @@ def import_string(dotted_path):
     try:
         return getattr(module, class_name)
     except AttributeError as err:
-        raise ImportError('Module "%s" does not define a "%s" attribute/class' % (module_path, class_name)) from err
+        raise ImportError(
+            'Module "%s" does not define a "%s" attribute/class'
+            % (module_path, class_name)
+        ) from err
 
 
 def get_project_root_path(mod_name: str) -> str:
@@ -93,29 +96,39 @@ def load_model_from_file_location(name, path):
     return proto_module
 
 
-def import_proto_file(proto_file_path):
+def import_proto_file(proto_path: Path):
     # 获取 proto 文件的基础名称，去掉扩展名
-    base_name = os.path.splitext(os.path.basename(proto_file_path))[0]
+    # base_name = os.path.splitext(os.path.basename(proto_file_path))[0]
+    base_name = proto_path.stem
 
-    # 拼接生成的 Python 文件路径，假设生成的文件名为 base_name_pb2.py
-    pb2_file_path = os.path.join(os.path.dirname(proto_file_path), f"{base_name}_pb2.py")
-    pb2_grpc_file_path = os.path.join(os.path.dirname(proto_file_path), f"{base_name}_pb2_grpc.py")
-
+    # # 拼接生成的 Python 文件路径，假设生成的文件名为 base_name_pb2.py
+    # pb2_file_path = os.path.join(
+    #     os.path.dirname(proto_file_path), f"{base_name}_pb2.py"
+    # )
+    # pb2_grpc_file_path = os.path.join(
+    #     os.path.dirname(proto_file_path), f"{base_name}_pb2_grpc.py"
+    # )
+    pb2_file_path = proto_path.parent / f"{base_name}_pb2.py"
+    pb2_grpc_file_path = proto_path.parent / f"{base_name}_pb2_grpc.py"
     # 检查生成的 Python 文件是否存在
-    if not os.path.exists(pb2_file_path):
+    if not pb2_file_path.exists():
         raise FileNotFoundError(f"生成的 pb2 文件 {pb2_file_path} 不存在。")
-    if not os.path.exists(pb2_grpc_file_path):
+    if not pb2_grpc_file_path.exists():
         raise FileNotFoundError(f"生成的 pb2 文件 {pb2_grpc_file_path} 不存在。")
 
     # 动态加载模块
     _pb2 = load_model_from_file_location(f"{base_name}_pb2.py", pb2_file_path)
-    _pb2_grpc = load_model_from_file_location(f"{base_name}_pb2_grpc.py", pb2_grpc_file_path)
+    _pb2_grpc = load_model_from_file_location(
+        f"{base_name}_pb2_grpc.py", pb2_grpc_file_path
+    )
 
     return _pb2, _pb2_grpc
 
 
 def message_to_dict(message):
-    return MessageToDict(message, including_default_value_fields=True, preserving_proto_field_name=True)
+    return MessageToDict(
+        message, including_default_value_fields=True, preserving_proto_field_name=True
+    )
 
 
 def json_to_message(data, message_cls):
@@ -128,9 +141,9 @@ def dict_to_message(data, message_cls):
 
 def get_typed_annotation(param: inspect.Parameter, _globals: Dict[str, Any]) -> Any:
     annotation = param.annotation
-    if isinstance(annotation, str):
-        annotation = ForwardRef(annotation)
-        annotation = evaluate_forwardref(annotation, _globals, _globals)
+    # if isinstance(annotation, str):
+    #     annotation = ForwardRef(annotation)
+    #     annotation = evaluate_forwardref(annotation, _globals, _globals)
     return annotation
 
 
@@ -146,7 +159,9 @@ def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:
         )
         for param in signature.parameters.values()
     ]
-    typed_signature = inspect.Signature(typed_params, return_annotation=signature.return_annotation)
+    typed_signature = inspect.Signature(
+        typed_params, return_annotation=signature.return_annotation
+    )
     return typed_signature
 
 
@@ -160,17 +175,20 @@ def to_pascal_case(snake_str: str) -> str:
     Returns:
         str: The PascalCase version of the string.
     """
-    return ''.join(x.capitalize() for x in snake_str.split('_'))
+    return "".join(x.capitalize() for x in snake_str.split("_"))
 
 
-def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
+def protoc_compile(proto: Path, python_out=".", grpc_python_out="."):
     """
     python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. -I. demo.proto
     """
-    if not os.path.exists(proto_name):
-        raise FileNotFoundError(f"Proto file or directory '{proto_name}' not found")
-    proto_dir = os.path.dirname(proto_name) if os.path.isfile(proto_name) else proto_name
-    proto_files = [os.path.join(proto_dir, f) for f in os.listdir(proto_dir) if f.endswith(".proto")]
+    if not proto.exists():
+        raise FileNotFoundError(f"Proto file or directory '{proto}' not found")
+    if proto.is_file():
+        proto_dir = proto.parent
+    else:
+        proto_dir = proto
+    proto_files = [proto_dir / f for f in os.listdir(proto_dir) if f.endswith(".proto")]
     protoc_args = [
         sys.executable,
         "-m",
@@ -186,4 +204,4 @@ def protoc_compile(proto_name, python_out=".", grpc_python_out="."):
     if status_code != 0:
         logger.error(f"Command `{' '.join(protoc_args)}` [Err] {status_code=}")
         raise RuntimeError("Protobuf compilation failed")
-    logger.info(f"Compiled {proto_name} successfully")
+    logger.info(f"Compiled {proto} successfully")
