@@ -26,6 +26,7 @@ from fast_grpc.utils import (
     import_proto_file,
     get_typed_signature,
     to_pascal_case,
+    json_to_message,
 )
 
 T = TypeVar("T")
@@ -96,7 +97,7 @@ class BaseMethod(ABC, Generic[Request, Response]):
 
         if self.response_model:
             validated_response = self.response_model.parse_obj(response)
-            return dict_to_message(
+            return json_to_message(
                 validated_response.model_dump_json(exclude_unset=True),
                 context.output_type,
             )
