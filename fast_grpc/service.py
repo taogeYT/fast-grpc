@@ -82,11 +82,11 @@ class BaseMethod(ABC, Generic[Request, Response]):
 
             async def validate_async_iterator_request():
                 async for item in request:
-                    yield self.request_model.parse_obj(message_to_dict(item))
+                    yield self.request_model.model_validate(message_to_dict(item))
 
             values[self.request_param.name] = validate_async_iterator_request()
         else:
-            values[self.request_param.name] = self.request_model.parse_obj(
+            values[self.request_param.name] = self.request_model.model_validate(
                 message_to_dict(request)
             )
         return values
@@ -96,9 +96,9 @@ class BaseMethod(ABC, Generic[Request, Response]):
             return response
 
         if self.response_model:
-            validated_response = self.response_model.parse_obj(response)
+            validated_response = self.response_model.model_validate(response)
             return json_to_message(
-                validated_response.model_dump_json(exclude_unset=True),
+                validated_response.model_dump_json(),
                 context.output_type,
             )
         if isinstance(response, dict):
