@@ -136,6 +136,7 @@ def generate_type_name(type_: type) -> str:
     args = get_args(type_)
     if origin is None:
         if issubclass(type_, BaseModel):
+            # todo 字符串类型反向解析
             metadata = type_.__pydantic_generic_metadata__
             args = metadata["args"]
             origin = metadata["origin"] or type_

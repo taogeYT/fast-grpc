@@ -141,6 +141,7 @@ def dict_to_message(data, message_cls):
 
 def get_typed_annotation(param: inspect.Parameter, _globals: Dict[str, Any]) -> Any:
     annotation = param.annotation
+    # todo 字符串类型反向解析
     # if isinstance(annotation, str):
     #     annotation = ForwardRef(annotation)
     #     annotation = evaluate_forwardref(annotation, _globals, _globals)
