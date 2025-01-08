@@ -188,7 +188,9 @@ def protoc_compile(proto: Path, python_out=".", grpc_python_out="."):
         proto_dir = proto.parent
     else:
         proto_dir = proto
-    proto_files = [proto_dir / f for f in os.listdir(proto_dir) if f.endswith(".proto")]
+    proto_files = [
+        str(f) for f in proto_dir.iterdir() if f.is_file() and f.name.endswith(".proto")
+    ]
     protoc_args = [
         sys.executable,
         "-m",
