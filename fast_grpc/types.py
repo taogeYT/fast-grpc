@@ -13,7 +13,6 @@ from typing import (
 from pydantic import conint
 from pydantic import BaseModel
 
-from fast_grpc.base import BaseSchema
 from fast_grpc.context import ServiceContext
 
 Request = TypeVar("Request")
@@ -46,5 +45,5 @@ StringValue = Optional[WrapperValue[str]]
 BytesValue = Optional[WrapperValue[bytes]]
 
 
-class Empty(BaseSchema):
+class Empty(BaseModel):
     pass
