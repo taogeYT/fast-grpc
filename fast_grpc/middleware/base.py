@@ -20,9 +20,9 @@ class BaseGRPCMiddleware:
             response = await method(request, context)
             message = MessageToString(request, as_one_line=True)
             end_time = time.time()
-            elapsed_time = end_time - start_time
+            elapsed_time = (end_time - start_time) * 1000
             logger.info(
-                f"GRPC invoke {context.service_method.name}({message}) [OK] {elapsed_time:.3f} seconds"
+                f"GRPC invoke {context.service_method.name}({message}) [OK] {elapsed_time:.0f} ms"
             )
             return response
         except Exception as exc:
