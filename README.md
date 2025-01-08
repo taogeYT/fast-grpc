@@ -1,8 +1,8 @@
 # fast-grpc
-Fast to Code gRPC in Python 3.7+
+Fast to Code gRPC in Python 3.9+
 
 # Installation
-Require Python 3.7+
+Require Python 3.9+
 ```shell
 pip install python-fast-grpc
 ```
@@ -10,22 +10,21 @@ pip install python-fast-grpc
 # Quick start
 1. Run a gRPC application
 ```python
-from fast_grpc import BaseSchema, FastGRPC, ServicerContext, method
+from pydantic import BaseModel
+from fast_grpc import FastGRPC
 
-app = FastGRPC()
+app = FastGRPC(service_name="Greeter", proto="greeter.proto")
 
-class HelloRequest(BaseSchema):
+class HelloRequest(BaseModel):
     name: str
 
-class HelloReply(BaseSchema):
+class HelloReply(BaseModel):
     message: str
 
-class Greeter:
-    @method("SayHello", request_model=HelloRequest, response_model=HelloReply)
-    async def say_hello(self, request: HelloRequest, context: ServicerContext) -> HelloReply:
-        return HelloReply(message=f"Greeter SayHello {request.name}")
+@app.unary_unary()
+async def say_hello(request: HelloRequest) -> HelloReply:
+    return HelloReply(message=f"Greeter SayHello {request.name}")
 
-app.add_service(Greeter)
 # this step will generate .proto file and python gRPC code, then start a grpc server
 app.run()
 ```
