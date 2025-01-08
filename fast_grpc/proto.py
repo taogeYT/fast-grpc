@@ -8,7 +8,7 @@ from typing_extensions import get_args, get_origin
 from jinja2 import Template
 
 from fast_grpc.service import Service
-from fast_grpc.base import EmptySchema
+from fast_grpc.types import Empty
 from fast_grpc.types import (
     BoolValue,
     BytesValue,
@@ -164,8 +164,8 @@ class ProtoBuilder:
         srv = ProtoService(name=service.name, methods=[])
         self._proto_define.services.append(srv)
         for name, method in service.methods.items():
-            request = self.convert_message(method.request_model or EmptySchema)
-            response = self.convert_message(method.response_model or EmptySchema)
+            request = self.convert_message(method.request_model or Empty)
+            response = self.convert_message(method.response_model or Empty)
             srv.methods.append(
                 ProtoMethod(name=name, request=request.name, response=response.name)
             )

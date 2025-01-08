@@ -204,6 +204,8 @@ MethodType = Union[
 
 class Service:
     def __init__(self, name: str, proto: str = ""):
+        if proto and not proto.endswith(".proto"):
+            raise ValueError("Service proto must end with '.proto'")
         self.name: str = name
         self.proto: str = proto
         self.methods: Dict[str, MethodType] = {}
