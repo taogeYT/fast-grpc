@@ -1,5 +1,6 @@
 import inspect
 import typing
+from enum import Enum
 from pathlib import Path
 from typing import (
     Dict,
@@ -18,7 +19,6 @@ import grpc
 from abc import ABC, abstractmethod
 
 from fast_grpc.context import ServiceContext
-from fast_grpc.middleware import MiddlewareManager
 from fast_grpc.types import Request, Response
 from fast_grpc.utils import (
     message_to_dict,
@@ -27,13 +27,23 @@ from fast_grpc.utils import (
     get_typed_signature,
     to_pascal_case,
     json_to_message,
+    get_param_annotation_model,
 )
 
 T = TypeVar("T")
 R = TypeVar("R")
 
 
+class MethodMode(Enum):
+    UNARY_UNARY = "unary_unary"
+    UNARY_STREAM = "unary_stream"
+    STREAM_UNARY = "stream_unary"
+    STREAM_STREAM = "stream_stream"
+
+
 class BaseMethod(ABC, Generic[Request, Response]):
+    mode: MethodMode
+
     def __init__(
         self,
         endpoint: Callable,
@@ -48,22 +58,40 @@ class BaseMethod(ABC, Generic[Request, Response]):
         self.request_model = request_model
         self.response_model = response_model
         self.description = description
-        self.middlewares = []
         endpoint_signature = get_typed_signature(self.endpoint)
-        if 0 < len(endpoint_signature.parameters) <= 2:
-            request, *keys = endpoint_signature.parameters.keys()
-            self.request_param = endpoint_signature.parameters[request]
-            self.context_param = (
-                endpoint_signature.parameters[keys[0]] if keys else None
-            )
-            if self.request_param.annotation is not inspect.Signature.empty:
-                self.request_model = self.request_model or self.request_param.annotation
-            if endpoint_signature.return_annotation is not inspect.Signature.empty:
-                self.response_model = (
-                    self.response_model or endpoint_signature.return_annotation
-                )
-        else:
+        if not (0 < len(endpoint_signature.parameters) <= 2):
             raise NotImplementedError("service method only supports 2 parameters")
+        request, *keys = endpoint_signature.parameters.keys()
+        self.request_param = endpoint_signature.parameters[request]
+        self.context_param = endpoint_signature.parameters[keys[0]] if keys else None
+        if self.request_param.annotation is not inspect.Signature.empty:
+            request_param_model = get_param_annotation_model(
+                self.request_param.annotation, self.is_request_iterable
+            )
+            self.request_model = self.request_model or request_param_model
+        if endpoint_signature.return_annotation is not inspect.Signature.empty:
+            response_param_model = get_param_annotation_model(
+                endpoint_signature.return_annotation, self.is_response_iterable
+            )
+            self.response_model = self.response_model or response_param_model
+        if self.response_model and not issubclass(self.response_model, BaseModel):
+            raise ValueError("response_model must be a BaseModel subclass")
+        if self.response_model and not issubclass(self.response_model, BaseModel):
+            raise ValueError("response_model must be a BaseModel subclass")
+
+    @property
+    def is_request_iterable(self):
+        return self.mode in (MethodMode.STREAM_UNARY, MethodMode.STREAM_STREAM)
+
+    @property
+    def is_response_iterable(self):
+        return self.mode in (MethodMode.UNARY_STREAM, MethodMode.STREAM_STREAM)
+
+    def _parse_request_param(self, param_annotation):
+        if param_annotation is inspect.Signature.empty:
+            return None
+        if self.mode in {MethodMode.STREAM_UNARY, MethodMode.STREAM_STREAM}:
+            pass
 
     @abstractmethod
     def get_service_method(self) -> grpc.RpcMethodHandler:
@@ -111,7 +139,7 @@ class BaseMethod(ABC, Generic[Request, Response]):
 
 
 class UnaryUnaryMethod(BaseMethod[Request, Response]):
-    """一元调用方法"""
+    mode = MethodMode.UNARY_UNARY
 
     async def __call__(self, request: Request, context: ServiceContext) -> Response:
         try:
@@ -131,22 +159,16 @@ class UnaryUnaryMethod(BaseMethod[Request, Response]):
 
 
 class UnaryStreamMethod(BaseMethod[Request, AsyncIterator[Response]]):
-    """一元请求，流式响应方法"""
+    mode = MethodMode.UNARY_STREAM
 
     async def __call__(
         self, request: Request, context: ServiceContext
     ) -> AsyncIterator[Response]:
-        try:
-            values = self.solve_params(request, context)
-            iterator_response = await self.endpoint(**values)
+        values = self.solve_params(request, context)
+        iterator_response = self.endpoint(**values)
 
-            async for response in await iterator_response:
-                yield self.serialize_response(response, context)
-
-        except Exception as e:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+        async for response in iterator_response:
+            yield self.serialize_response(response, context)
 
     def get_service_method(self) -> grpc.RpcMethodHandler:
         return grpc.unary_stream_rpc_method_handler(
@@ -155,19 +177,14 @@ class UnaryStreamMethod(BaseMethod[Request, AsyncIterator[Response]]):
 
 
 class StreamUnaryMethod(BaseMethod[AsyncIterator[Request], Response]):
-    """流式请求，一元响应方法"""
+    mode = MethodMode.STREAM_UNARY
 
     async def __call__(
         self, request_iterator: AsyncIterator[Request], context: ServiceContext
     ) -> Response:
-        try:
-            values = self.solve_params(request_iterator, context)
-            response = await self.endpoint(**values)
-            return self.serialize_response(response, context)
-        except Exception as e:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+        values = self.solve_params(request_iterator, context)
+        response = await self.endpoint(**values)
+        return self.serialize_response(response, context)
 
     def get_service_method(self) -> grpc.RpcMethodHandler:
         return grpc.stream_unary_rpc_method_handler(
@@ -176,20 +193,15 @@ class StreamUnaryMethod(BaseMethod[AsyncIterator[Request], Response]):
 
 
 class StreamStreamMethod(BaseMethod[AsyncIterator[Request], AsyncIterator[Response]]):
-    """双向流式方法"""
+    mode = MethodMode.STREAM_STREAM
 
     async def __call__(
         self, request_iterator: AsyncIterator[Request], context: ServiceContext
     ) -> AsyncIterator[Response]:
-        try:
-            values = self.solve_params(request_iterator, context)
-            iterator_response = await self.endpoint(**values)
-            async for response in await iterator_response:
-                yield self.serialize_response(response, context)
-        except Exception as e:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+        values = self.solve_params(request_iterator, context)
+        iterator_response = self.endpoint(**values)
+        async for response in iterator_response:
+            yield self.serialize_response(response, context)
 
     def get_service_method(self) -> grpc.RpcMethodHandler:
         return grpc.stream_stream_rpc_method_handler(
@@ -330,7 +342,7 @@ class Service:
 
         return decorator
 
-    def bind_server(self, server, middleware_manager: MiddlewareManager):
+    def bind_server(self, server):
         if self.grpc_servicer is not None:
             logger.info("Service already bound to server")
             return None
@@ -344,7 +356,7 @@ class Service:
         pb2, pb2_grpc = import_proto_file(proto)
         interface_class = getattr(pb2_grpc, interface_name)
         self.grpc_servicer = make_grpc_service_from_methods(
-            pb2, name, interface_class, methods, middleware_manager
+            pb2, name, interface_class, methods
         )
         pb2_grpc_add_func = getattr(pb2_grpc, f"add_{interface_name}_to_server")
         pb2_grpc_add_func(self.grpc_servicer(), server)
@@ -356,15 +368,25 @@ def make_grpc_service_from_methods(
     service_name,
     interface_class,
     methods: Dict[str, MethodType],
-    middleware_manager: MiddlewareManager,
 ):
     def create_method(method: MethodType, method_descriptor):
-        async def service_method(self, request, context):
-            srv_context = ServiceContext(context, method, method_descriptor)
-            return await middleware_manager.dispatch(method, request, srv_context)
+        if method.is_response_iterable:
 
-        service_method.__name__ = method.name
-        return service_method
+            async def service_iterable_method(self, request, context):
+                srv_context = ServiceContext(context, method, method_descriptor)
+                async for response in method(request, srv_context):
+                    yield response
+
+            service_iterable_method.__name__ = method.name
+            return service_iterable_method
+        else:
+
+            async def service_method(self, request, context):
+                srv_context = ServiceContext(context, method, method_descriptor)
+                return await method(request, srv_context)
+
+            service_method.__name__ = method.name
+            return service_method
 
     service_descriptor = pb2.DESCRIPTOR.services_by_name[service_name]
     return type(
@@ -375,12 +397,6 @@ def make_grpc_service_from_methods(
             for name, method in methods.items()
         },
     )
-
-
-def add_service_to_server(
-    service: Service, server, middleware_manager: MiddlewareManager
-):
-    pass
 
 
 class Servicer:

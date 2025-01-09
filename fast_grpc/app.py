@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from typing import Callable, Optional, Type, Sequence
+from typing import Callable, Optional, Type
 
 import grpc
 from grpc.aio._typing import ChannelArgumentType  # noqa
@@ -8,10 +8,14 @@ from grpc.aio import Server
 from logzero import logger
 from pydantic import BaseModel
 
-from fast_grpc.middleware import MiddlewareManager, BaseMiddleware
-from fast_grpc.middleware.base import BaseGRPCMiddleware
 from fast_grpc.proto import render_proto_file, ProtoBuilder
-from fast_grpc.service import Service, UnaryUnaryMethod
+from fast_grpc.service import (
+    Service,
+    UnaryUnaryMethod,
+    UnaryStreamMethod,
+    StreamUnaryMethod,
+    StreamStreamMethod,
+)
 from fast_grpc.utils import protoc_compile
 
 
@@ -21,14 +25,10 @@ class FastGRPC(object):
         *,
         service_name: str = "FastGRPC",
         proto: str = "fast_grpc.proto",
-        middleware: Optional[Sequence[BaseMiddleware]] = None,
         auto_gen_proto: bool = True,
     ):
         self.service = Service(name=service_name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{service_name}": self.service}
-        _middleware = middleware if middleware else []
-        _middleware.insert(0, BaseGRPCMiddleware())
-        self._middleware_manager = MiddlewareManager(_middleware)
         self._auto_gen_proto = auto_gen_proto
 
     def setup(self) -> None:
@@ -47,9 +47,6 @@ class FastGRPC(object):
                 proto.write_text(content)
             protoc_compile(proto)
 
-    def add_middleware(self, middleware: BaseMiddleware) -> None:
-        self._middleware_manager.add_middleware(middleware)
-
     def unary_unary(
         self,
         name: Optional[str] = None,
@@ -63,6 +60,69 @@ class FastGRPC(object):
                 name=name,
                 endpoint=endpoint,
                 method_class=UnaryUnaryMethod,
+                request_model=request_model,
+                response_model=response_model,
+                description=description,
+            )
+            return endpoint
+
+        return decorator
+
+    def unary_stream(
+        self,
+        name: Optional[str] = None,
+        *,
+        request_model: Optional[Type[BaseModel]] = None,
+        response_model: Optional[Type[BaseModel]] = None,
+        description: str = "",
+    ):
+        def decorator(endpoint: Callable) -> Callable:
+            self.service.add_method(
+                name=name,
+                endpoint=endpoint,
+                method_class=UnaryStreamMethod,
+                request_model=request_model,
+                response_model=response_model,
+                description=description,
+            )
+            return endpoint
+
+        return decorator
+
+    def stream_unary(
+        self,
+        name: Optional[str] = None,
+        *,
+        request_model: Optional[Type[BaseModel]] = None,
+        response_model: Optional[Type[BaseModel]] = None,
+        description: str = "",
+    ):
+        def decorator(endpoint: Callable) -> Callable:
+            self.service.add_method(
+                name=name,
+                endpoint=endpoint,
+                method_class=StreamUnaryMethod,
+                request_model=request_model,
+                response_model=response_model,
+                description=description,
+            )
+            return endpoint
+
+        return decorator
+
+    def stream_stream(
+        self,
+        name: Optional[str] = None,
+        *,
+        request_model: Optional[Type[BaseModel]] = None,
+        response_model: Optional[Type[BaseModel]] = None,
+        description: str = "",
+    ):
+        def decorator(endpoint: Callable) -> Callable:
+            self.service.add_method(
+                name=name,
+                endpoint=endpoint,
+                method_class=StreamStreamMethod,
                 request_model=request_model,
                 response_model=response_model,
                 description=description,
@@ -96,7 +156,7 @@ class FastGRPC(object):
         self.setup()
         server = grpc.aio.server() if not server else server
         for service in self._services.values():
-            service.bind_server(server, self._middleware_manager)
+            service.bind_server(server)
         server.add_insecure_port(f"{host}:{port}")
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")

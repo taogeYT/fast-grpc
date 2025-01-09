@@ -8,6 +8,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    AsyncIterable,
 )
 
 from pydantic import conint
@@ -18,7 +19,9 @@ from fast_grpc.context import ServiceContext
 Request = TypeVar("Request")
 Response = TypeVar("Response")
 
-Method = Callable[[Request, ServiceContext], Awaitable[Response]]
+Method = Callable[
+    [Request, ServiceContext], Union[AsyncIterable[Response], Awaitable[Response]]
+]
 MetadataType = Sequence[Tuple[str, Union[str, bytes]]]
 
 Uint32 = conint(ge=0, lt=2**32)

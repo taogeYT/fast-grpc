@@ -10,9 +10,18 @@ import sys
 import inspect
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    AsyncIterator,
+    get_origin,
+    get_args,
+    AsyncIterable,
+)
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
+from google.protobuf.text_format import MessageToString
 from logzero import logger
 # from pydantic._internal._typing_extra import try_eval_type as evaluate_forwardref
 
@@ -137,6 +146,24 @@ def json_to_message(data, message_cls):
 
 def dict_to_message(data, message_cls):
     return ParseDict(data, message_cls(), ignore_unknown_fields=True)
+
+
+def message_to_str(message_or_iterator) -> str:
+    if isinstance(message_or_iterator, AsyncIterator):
+        return "<StreamingMessage>"
+    return MessageToString(message_or_iterator, as_one_line=True, force_colon=True)
+
+
+def get_param_annotation_model(annotation, is_streaming=False):
+    if annotation is inspect.Signature.empty:
+        return None
+    if not is_streaming:
+        return annotation
+    origin_type = get_origin(annotation)
+    args = get_args(annotation)
+    if not issubclass(origin_type, AsyncIterable):
+        return None
+    return args[0] if args else None
 
 
 def get_typed_annotation(param: inspect.Parameter, _globals: Dict[str, Any]) -> Any:

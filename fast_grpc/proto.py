@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing_extensions import get_args, get_origin
 from jinja2 import Template
 
-from fast_grpc.service import Service
+from fast_grpc.service import Service, MethodMode
 from fast_grpc.types import Empty
 from fast_grpc.types import (
     BoolValue,
@@ -167,9 +167,14 @@ class ProtoBuilder:
         for name, method in service.methods.items():
             request = self.convert_message(method.request_model or Empty)
             response = self.convert_message(method.response_model or Empty)
-            srv.methods.append(
-                ProtoMethod(name=name, request=request.name, response=response.name)
+            proto_method = ProtoMethod(
+                name=name, request=request.name, response=response.name
             )
+            if method.mode in {MethodMode.STREAM_UNARY, MethodMode.STREAM_STREAM}:
+                proto_method.request = f"stream {proto_method.request}"
+            if method.mode in {MethodMode.UNARY_STREAM, MethodMode.STREAM_STREAM}:
+                proto_method.response = f"stream {proto_method.response}"
+            srv.methods.append(proto_method)
         return self
 
     def get_proto(self):
