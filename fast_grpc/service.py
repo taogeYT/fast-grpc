@@ -28,6 +28,7 @@ from fast_grpc.utils import (
     to_pascal_case,
     json_to_message,
     get_param_annotation_model,
+    message_to_str,
 )
 
 T = TypeVar("T")
@@ -144,10 +145,16 @@ class UnaryUnaryMethod(BaseMethod[Request, Response]):
     async def __call__(self, request: Request, context: ServiceContext) -> Response:
         try:
             values = self.solve_params(request, context)
-            response = await self.endpoint(**values)
-            return self.serialize_response(response, context)
+            result = await self.endpoint(**values)
+            response = self.serialize_response(result, context)
+            logger.info(
+                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
+            )
+            return response
         except Exception as e:
-            logger.exception(e)
+            logger.exception(
+                f"GRPC invoke {context.service_method.__name__}({message_to_str(request)}) [Err] -> {repr(e)}"
+            )
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             raise
@@ -164,11 +171,21 @@ class UnaryStreamMethod(BaseMethod[Request, AsyncIterator[Response]]):
     async def __call__(
         self, request: Request, context: ServiceContext
     ) -> AsyncIterator[Response]:
-        values = self.solve_params(request, context)
-        iterator_response = self.endpoint(**values)
-
-        async for response in iterator_response:
-            yield self.serialize_response(response, context)
+        try:
+            values = self.solve_params(request, context)
+            iterator_response = self.endpoint(**values)
+            async for response in iterator_response:
+                yield self.serialize_response(response, context)
+            logger.info(
+                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
+            )
+        except Exception as e:
+            logger.exception(
+                f"GRPC invoke {context.service_method.__name__}({message_to_str(request)}) [Err] -> {repr(e)}"
+            )
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            raise
 
     def get_service_method(self) -> grpc.RpcMethodHandler:
         return grpc.unary_stream_rpc_method_handler(
@@ -182,9 +199,21 @@ class StreamUnaryMethod(BaseMethod[AsyncIterator[Request], Response]):
     async def __call__(
         self, request_iterator: AsyncIterator[Request], context: ServiceContext
     ) -> Response:
-        values = self.solve_params(request_iterator, context)
-        response = await self.endpoint(**values)
-        return self.serialize_response(response, context)
+        try:
+            values = self.solve_params(request_iterator, context)
+            response = await self.endpoint(**values)
+            result = self.serialize_response(response, context)
+            logger.info(
+                f"GRPC invoke {context.service_method.name}({message_to_str(request_iterator)}) [OK] {context.elapsed_time} ms"
+            )
+            return result
+        except Exception as e:
+            logger.exception(
+                f"GRPC invoke {context.service_method.__name__}({message_to_str(request_iterator)}) [Err] -> {repr(e)}"
+            )
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            raise
 
     def get_service_method(self) -> grpc.RpcMethodHandler:
         return grpc.stream_unary_rpc_method_handler(
@@ -198,10 +227,21 @@ class StreamStreamMethod(BaseMethod[AsyncIterator[Request], AsyncIterator[Respon
     async def __call__(
         self, request_iterator: AsyncIterator[Request], context: ServiceContext
     ) -> AsyncIterator[Response]:
-        values = self.solve_params(request_iterator, context)
-        iterator_response = self.endpoint(**values)
-        async for response in iterator_response:
-            yield self.serialize_response(response, context)
+        try:
+            values = self.solve_params(request_iterator, context)
+            iterator_response = self.endpoint(**values)
+            async for response in iterator_response:
+                yield self.serialize_response(response, context)
+            logger.info(
+                f"GRPC invoke {context.service_method.name}({message_to_str(request_iterator)}) [OK] {context.elapsed_time} ms"
+            )
+        except Exception as e:
+            logger.exception(
+                f"GRPC invoke {context.service_method.__name__}({message_to_str(request_iterator)}) [Err] -> {repr(e)}"
+            )
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            raise
 
     def get_service_method(self) -> grpc.RpcMethodHandler:
         return grpc.stream_stream_rpc_method_handler(
