@@ -14,6 +14,7 @@ class ServiceContext:
     def __init__(self, grpc_context: grpc.ServicerContext, method, method_descriptor):
         self.grpc_context = grpc_context
         self.service_method = method
+        self.method_descriptor = method_descriptor
         self.input_type = method_descriptor.input_type._concrete_class
         self.output_type = method_descriptor.output_type._concrete_class
         self._start_time = time.time()
