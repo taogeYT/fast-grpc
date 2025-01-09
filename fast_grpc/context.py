@@ -1,3 +1,5 @@
+import time
+
 import grpc
 from typing import List, Tuple
 
@@ -14,6 +16,11 @@ class ServiceContext:
         self.service_method = method
         self.input_type = method_descriptor.input_type._concrete_class
         self.output_type = method_descriptor.output_type._concrete_class
+        self._start_time = time.time()
+
+    @property
+    def elapsed_time(self):
+        return int(time.time() - self._start_time) * 1000
 
     def is_active(self) -> bool:
         return self.grpc_context.is_active()
