@@ -1,14 +1,3 @@
-"""
-import grpc
-import fast_grpc_pb2 as pb2
-import fast_grpc_pb2_grpc as pb2_grpc
-channel = grpc.insecure_channel("127.0.0.1:50051")
-stub = pb2_grpc.FastGRPCStub(channel)
-response = stub.SayHello(pb2.HelloRequest(name="fastGRPC"))
-print("Greeter client received: ", response)
-response = stub.SayAgain(pb2.Empty())
-print("Greeter client received: ", response)
-"""
 import datetime
 from enum import IntEnum
 from pydantic import Field, BaseModel
@@ -63,6 +52,17 @@ async def say_again(request: Empty) -> OkReply:
 
 
 if __name__ == "__main__":
+    """
+    import grpc
+    import fast_grpc_pb2 as pb2
+    import fast_grpc_pb2_grpc as pb2_grpc
+    channel = grpc.insecure_channel("127.0.0.1:50051")
+    stub = pb2_grpc.FastGRPCStub(channel)
+    response = stub.SayHello(pb2.HelloRequest(name="fastGRPC"))
+    print("Greeter client received: ", response)
+    response = stub.SayAgain(pb2.Empty())
+    print("Greeter client received: ", response)
+    """
     app = FastGRPC()
     app.add_service(srv)
     app.run()
