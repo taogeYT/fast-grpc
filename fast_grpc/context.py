@@ -4,12 +4,6 @@ import grpc
 from typing import List, Tuple
 
 
-class ServicerContext:
-    def __init__(self, context, method):
-        self.rpc_context = context
-        self.method = method
-
-
 class ServiceContext:
     def __init__(self, grpc_context: grpc.ServicerContext, method, method_descriptor):
         self.grpc_context = grpc_context
