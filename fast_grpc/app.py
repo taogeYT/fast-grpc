@@ -45,6 +45,7 @@ class FastGRPC(object):
                 content = render_proto_file(proto_define)
                 proto.parent.mkdir(parents=True, exist_ok=True)
                 proto.write_text(content)
+                logger.info(f"Created {proto} file success")
             protoc_compile(proto)
 
     def unary_unary(
@@ -156,7 +157,7 @@ class FastGRPC(object):
         self.setup()
         server = grpc.aio.server() if not server else server
         for service in self._services.values():
-            service.bind_server(server)
+            service.add_to_server(server)
         server.add_insecure_port(f"{host}:{port}")
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")

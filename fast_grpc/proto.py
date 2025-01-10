@@ -64,7 +64,7 @@ package {{ proto_define.package }};
 {% for service in proto_define.services %}
 service {{ service.name }} {
     {% for method in service.methods -%}
-    rpc {{ method.name }} ({{ method.request }}) returns ({{ method.response }});
+    rpc {{ method.name }}({{ method.request }}) returns ({{ method.response }});
     {%- if not loop.last %}
     {% endif %}
     {%- endfor %}
