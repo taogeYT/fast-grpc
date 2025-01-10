@@ -18,12 +18,13 @@ from typing import (
     get_origin,
     get_args,
     AsyncIterable,
+    ForwardRef,
 )
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
 from google.protobuf.text_format import MessageToString
 from logzero import logger
-# from pydantic._internal._typing_extra import try_eval_type as evaluate_forwardref
+from pydantic._internal._typing_extra import eval_type_lenient
 
 
 def import_string(dotted_path):
@@ -166,12 +167,10 @@ def get_param_annotation_model(annotation, is_streaming=False):
     return args[0] if args else None
 
 
-def get_typed_annotation(param: inspect.Parameter, _globals: Dict[str, Any]) -> Any:
-    annotation = param.annotation
-    # todo 字符串类型反向解析
-    # if isinstance(annotation, str):
-    #     annotation = ForwardRef(annotation)
-    #     annotation = evaluate_forwardref(annotation, _globals, _globals)
+def get_typed_annotation(annotation: Any, _globals: Dict[str, Any]) -> Any:
+    if isinstance(annotation, str):
+        annotation = ForwardRef(annotation)
+        annotation = eval_type_lenient(annotation, _globals, _globals)
     return annotation
 
 
@@ -183,12 +182,13 @@ def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:
             name=param.name,
             kind=param.kind,
             default=param.default,
-            annotation=get_typed_annotation(param, _globals),
+            annotation=get_typed_annotation(param.annotation, _globals),
         )
         for param in signature.parameters.values()
     ]
     typed_signature = inspect.Signature(
-        typed_params, return_annotation=signature.return_annotation
+        typed_params,
+        return_annotation=get_typed_annotation(signature.return_annotation, _globals),
     )
     return typed_signature
 
@@ -225,7 +225,6 @@ def protoc_compile(proto: Path, python_out=".", grpc_python_out="."):
         "grpc_tools.protoc",
         f"--python_out={python_out}",
         f"--grpc_python_out={grpc_python_out}",
-        # f"--mypy_out={python_out}",
         "-I.",
     ]
     for file in proto_files:
@@ -234,4 +233,4 @@ def protoc_compile(proto: Path, python_out=".", grpc_python_out="."):
     if status_code != 0:
         logger.error(f"Command `{' '.join(protoc_args)}` [Err] {status_code=}")
         raise RuntimeError("Protobuf compilation failed")
-    logger.info(f"Compiled {proto} successfully")
+    logger.info(f"Compiled {proto} success")
