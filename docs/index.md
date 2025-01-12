@@ -1,5 +1,5 @@
-# FastGRPC
-Fast to Code gRPC in Python 3.9+
+# Overview
+FastGRPC is a high-performance gRPC framework designed to simplify the development of gRPC services
 
 ## Features
 - Fast to code: FastAPI-like API design
