@@ -189,3 +189,12 @@ class FastGRPC(object):
         if path_name not in self._services:
             self._services[path_name] = Service(name=service.name, proto=service.proto)
         self._services[path_name].methods.update(service.methods)
+
+    def add_to_server(self, server: Server):
+        grpc_services = []
+        self.setup()
+        for service in self._services.values():
+            grpc_srv = service.add_to_server(server)
+            if grpc_srv:
+                grpc_services.append(grpc_srv)
+        return grpc_services

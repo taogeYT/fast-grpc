@@ -333,6 +333,7 @@ class Service:
         pb2_grpc_add_func = getattr(pb2_grpc, f"add_{interface_name}_to_server")
         pb2_grpc_add_func(self.grpc_servicer(), server)
         logger.info(f"{self} add_to_server success")
+        return self.grpc_servicer
 
 
 def make_grpc_service_from_methods(
