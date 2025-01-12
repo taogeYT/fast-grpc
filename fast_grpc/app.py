@@ -20,6 +20,17 @@ from fast_grpc.utils import protoc_compile
 
 
 class FastGRPC(object):
+    """
+    `FastGRPC` app class, the main entrypoint to use FastGRPC.
+
+    ## Example
+
+    ```python
+    from fast_grpc import FastGRPC
+
+    app = FastGRPC(service_name="Greeter", proto="greeter.proto")
+    ```
+    """
     def __init__(
         self,
         *,
@@ -27,6 +38,12 @@ class FastGRPC(object):
         proto: str = "fast_grpc.proto",
         auto_gen_proto: bool = True,
     ):
+        """
+        Args:
+            service_name: default grpc service name.
+            proto: grpc proto file path.
+            auto_gen_proto: Whether to automatically generate proto file or not. if not, the proto file will be defined by yourself.
+        """
         self.service = Service(name=service_name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{service_name}": self.service}
         self._auto_gen_proto = auto_gen_proto

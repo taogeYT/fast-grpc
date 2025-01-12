@@ -185,7 +185,15 @@ MethodType = Union[
 
 
 class Service:
+    """
+    define a grpc service
+    """
     def __init__(self, name: str, proto: str = ""):
+        """
+        Args:
+            name: your grpc service name.
+            proto: grpc proto file path.
+        """
         if proto and not proto.endswith(".proto"):
             raise ValueError("Service proto must end with '.proto'")
         self.name: str = name
