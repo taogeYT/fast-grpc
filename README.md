@@ -1,4 +1,4 @@
-# fast-grpc
+# FastGRPC
 Fast to Code gRPC in Python 3.9+
 
 # Installation
@@ -8,7 +8,7 @@ pip install python-fast-grpc
 ```
 
 # Quick start
-1. Run a gRPC application
+Create a simple gRPC service:
 ```python
 from pydantic import BaseModel
 from fast_grpc import FastGRPC
@@ -25,10 +25,12 @@ class HelloReply(BaseModel):
 async def say_hello(request: HelloRequest) -> HelloReply:
     return HelloReply(message=f"Greeter SayHello {request.name}")
 
-# this step will generate .proto file and python gRPC code, then start a grpc server
-app.run()
+if __name__ == '__main__':
+    # Auto-generates .proto file and starts gRPC server
+    app.run()
 ```
-2. Client invoke
+
+Test with a client:
 ```python
 import grpc
 import greeter_pb2 as pb2
@@ -36,6 +38,6 @@ import greeter_pb2_grpc as pb2_grpc
 
 channel = grpc.insecure_channel("127.0.0.1:50051")
 stub = pb2_grpc.GreeterStub(channel)
-response = stub.SayHello(pb2.HelloRequest(name="fastGRPC"))
+response = stub.SayHello(pb2.HelloRequest(name="FastGRPC"))
 print("Greeter client received: ", response)
 ```
