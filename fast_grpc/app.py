@@ -34,6 +34,8 @@ class FastGRPC(object):
     def setup(self) -> None:
         builders = {}
         for service in self._services.values():
+            if not service.methods:
+                continue
             if service.proto_path not in builders:
                 builders[service.proto_path] = ProtoBuilder(
                     package=service.proto_path.stem
