@@ -8,7 +8,7 @@ from grpc.aio import Server
 from logzero import logger
 from pydantic import BaseModel
 
-from fast_grpc.proto import render_proto_file, ProtoBuilder
+from fast_grpc.proto import ProtoBuilder
 from fast_grpc.service import (
     Service,
     UnaryUnaryMethod,
@@ -31,6 +31,7 @@ class FastGRPC(object):
     app = FastGRPC(service_name="Greeter", proto="greeter.proto")
     ```
     """
+
     def __init__(
         self,
         *,
@@ -61,7 +62,7 @@ class FastGRPC(object):
         for proto, builder in builders.items():
             if self._auto_gen_proto:
                 proto_define = builder.get_proto()
-                content = render_proto_file(proto_define)
+                content = proto_define.render_proto_file()
                 proto.parent.mkdir(parents=True, exist_ok=True)
                 proto.write_text(content)
                 logger.info(f"Created {proto} file success")

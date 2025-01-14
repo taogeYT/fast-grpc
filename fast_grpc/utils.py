@@ -155,6 +155,14 @@ def message_to_str(message_or_iterator) -> str:
     return MessageToString(message_or_iterator, as_one_line=True, force_colon=True)
 
 
+def message_to_pydantic(message, pydantic_model):
+    return pydantic_model.model_validate(message, from_attributes=True)
+
+
+def pydantic_to_message(model, message_cls):
+    return Parse(model.model_dump_json(), message_cls(), ignore_unknown_fields=True)
+
+
 def get_param_annotation_model(annotation, is_streaming=False):
     if annotation is inspect.Signature.empty:
         return None

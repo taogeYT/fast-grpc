@@ -3,9 +3,16 @@ import datetime
 from enum import IntEnum
 from typing import Type, Sequence, Any
 
+import grpc
 from pydantic import BaseModel
 from typing_extensions import get_args, get_origin
 from jinja2 import Template
+from google.protobuf.descriptor import (
+    ServiceDescriptor,
+    Descriptor,
+    FieldDescriptor,
+    EnumDescriptor,
+)
 
 from fast_grpc.service import Service, MethodMode
 from fast_grpc.types import Empty
@@ -88,7 +95,34 @@ message {{ message.name }} {
     {%- endfor %}
 }
 {% endfor %}
-""".strip()
+"""
+PYTHON_TEMPLATE = """
+import grpc
+from pydantic import BaseModel
+from fast_grpc.utils import message_to_pydantic, pydantic_to_message
+
+pb2, pb2_grpc = grpc.protos_and_services("{{ proto_define.package }}")
+{% for message in proto_define.messages.values() %}
+class {{ message.name }}(BaseModel):
+    {%- for field in message.fields %}
+    {{ field.name }}: {{ field.type }}
+    {%- endfor %}
+{% endfor %}
+{% for service in proto_define.services %}
+class {{ service.name }}Client:
+    def __init__(self, target: str="127.0.0.1:50051"):
+        self.target = target
+
+    {% for method in service.methods -%}
+    def {{ method.name }}(self, request: {{ method.request }}) -> {{ method.response }}:
+        with grpc.insecure_channel(self.target) as channel:
+            client = pb2_grpc.{{ service.name }}Stub(channel)
+            response = client.{{ method.name }}(pydantic_to_message(request, pb2.{{ method.request }}))
+            return message_to_pydantic(response, {{ method.response }})
+
+    {% endfor %}
+{% endfor %}
+"""
 
 
 class ProtoField(BaseModel):
@@ -110,6 +144,9 @@ class ProtoMethod(BaseModel):
     name: str
     request: str
     response: str
+    mode: MethodMode = MethodMode.UNARY_UNARY
+    client_streaming: bool = False
+    server_streaming: bool = False
 
 
 class ProtoService(BaseModel):
@@ -122,6 +159,16 @@ class ProtoDefine(BaseModel):
     services: list[ProtoService]
     messages: dict[Any, ProtoStruct]
     enums: dict[Any, ProtoStruct]
+
+    def render(self, proto_template) -> str:
+        template = Template(proto_template)
+        return template.render(proto_define=self)
+
+    def render_proto_file(self):
+        return self.render(PROTO_TEMPLATE)
+
+    def render_python_file(self):
+        return self.render(PYTHON_TEMPLATE)
 
 
 def generate_type_name(type_: type) -> str:
@@ -223,14 +270,121 @@ class ProtoBuilder:
             raise ValueError(f"Unsupported type: {type_}")
 
 
-def render_proto_file(proto_define: ProtoDefine, proto_template=PROTO_TEMPLATE) -> str:
-    template = Template(proto_template)
-    return template.render(proto_define=proto_define)
+class ClientBuilder:
+    def __init__(self, package: str):
+        self._proto_define = ProtoDefine(
+            package=package, services=[], messages={}, enums={}
+        )
+
+    def get_proto(self):
+        pb2 = grpc.protos(self._proto_define.package)
+        for service in pb2.DESCRIPTOR.services_by_name.values():
+            self.add_service(service)
+        return self._proto_define
+
+    def add_service(self, service: ServiceDescriptor):
+        srv = ProtoService(name=service.name, methods=[])
+        self._proto_define.services.append(srv)
+        for name, method in service.methods_by_name.items():
+            request = self.convert_message(method.input_type)
+            response = self.convert_message(method.output_type)
+            proto_method = ProtoMethod(
+                name=name,
+                request=request.name,
+                response=response.name,
+                client_streaming=method.client_streaming,
+                server_streaming=method.server_streaming,
+            )
+            if method.client_streaming and method.server_streaming:
+                proto_method.mode = MethodMode.STREAM_STREAM
+            elif method.client_streaming:
+                proto_method.mode = MethodMode.STREAM_UNARY
+            elif method.server_streaming:
+                proto_method.mode = MethodMode.UNARY_STREAM
+            else:
+                proto_method.mode = MethodMode.UNARY_UNARY
+            srv.methods.append(proto_method)
+        return self
+
+    def convert_message(self, message: Descriptor) -> ProtoStruct:
+        if message in self._proto_define.messages:
+            return self._proto_define.messages[message]
+        schema = ProtoStruct(name=message.name, fields=[])
+        for i, field in enumerate(message.fields):
+            type_name = self._get_type_name(field)
+            schema.fields.append(ProtoField(name=field.name, type=type_name, index=i))
+        self._proto_define.messages[message] = schema
+        return schema
+
+    def convert_enum(self, schema: EnumDescriptor):
+        if schema in self._proto_define.enums:
+            return self._proto_define.enums[schema]
+        enum_struct = ProtoStruct(
+            name=schema.name,
+            fields=[
+                ProtoField(name=name, index=value.index)
+                for name, value in schema.values_by_name.items()
+            ],
+        )
+        self._proto_define.enums[schema] = enum_struct
+        return enum_struct
+
+    def _get_type_name(self, field: FieldDescriptor) -> str:
+        # 先检查是否是 map 类型
+        if field.message_type and field.message_type.GetOptions().map_entry:
+            # 处理 map 类型
+            key_type = self._get_type_name(field.message_type.fields_by_name["key"])
+            value_type = self._get_type_name(field.message_type.fields_by_name["value"])
+            return f"dict[{key_type}, {value_type}]"
+
+        # 获取基础类型
+        def get_base_type() -> str:
+            if field.type == FieldDescriptor.TYPE_MESSAGE:
+                message = self.convert_message(field.message_type)
+                return message.name
+            elif field.type == FieldDescriptor.TYPE_ENUM:
+                struct = self.convert_enum(field.enum_type)
+                return struct.name
+
+            type_map = {
+                # 浮点数类型统一用 float
+                FieldDescriptor.TYPE_DOUBLE: "float",
+                FieldDescriptor.TYPE_FLOAT: "float",
+                # 整数类型统一用 int
+                FieldDescriptor.TYPE_INT64: "int",
+                FieldDescriptor.TYPE_UINT64: "int",
+                FieldDescriptor.TYPE_INT32: "int",
+                FieldDescriptor.TYPE_FIXED64: "int",
+                FieldDescriptor.TYPE_FIXED32: "int",
+                FieldDescriptor.TYPE_UINT32: "int",
+                FieldDescriptor.TYPE_SFIXED32: "int",
+                FieldDescriptor.TYPE_SFIXED64: "int",
+                FieldDescriptor.TYPE_SINT32: "int",
+                FieldDescriptor.TYPE_SINT64: "int",
+                # 其他基本类型保持不变
+                FieldDescriptor.TYPE_BOOL: "bool",
+                FieldDescriptor.TYPE_STRING: "str",
+                FieldDescriptor.TYPE_BYTES: "bytes",
+            }
+
+            if field.type in type_map:
+                return type_map[field.type]
+
+            raise ValueError(f"Unsupported field type: {field.type}")
+
+        base_type = get_base_type()
+
+        # 处理普通的 repeated 字段
+        if field.label == FieldDescriptor.LABEL_REPEATED:
+            return f"list[{base_type}]"
+
+        return base_type
 
 
-def save_proto_file(proto_define: ProtoDefine, proto_template=PROTO_TEMPLATE):
-    content = render_proto_file(
-        proto_define=proto_define, proto_template=proto_template
-    )
-    with open(proto_define.proto, "w") as f:
-        f.write(content)
+def proto_to_python_client(proto_path: str):
+    pb2 = grpc.protos(proto_path)
+    builder = ClientBuilder(proto_path)
+    for name, service in pb2.DESCRIPTOR.services_by_name.items():
+        builder.add_service(service)
+    proto_define = builder.get_proto()
+    return proto_define.render_python_file()
