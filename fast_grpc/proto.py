@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 from enum import IntEnum
+from pathlib import Path
 from typing import Type, Sequence, Any
 
 import grpc
@@ -32,6 +33,7 @@ from fast_grpc.types import (
     Uint64,
     UInt64Value,
 )
+from fast_grpc.utils import protoc_compile
 
 _base_types = {
     bytes: "bytes",
@@ -98,15 +100,27 @@ message {{ message.name }} {
 """
 PYTHON_TEMPLATE = """
 import grpc
+from enum import IntEnum
 from pydantic import BaseModel
 from fast_grpc.utils import message_to_pydantic, pydantic_to_message
 
 pb2, pb2_grpc = grpc.protos_and_services("{{ proto_define.package }}")
+{% for enum in proto_define.enums.values() %}
+class {{ enum.name }}(IntEnum):
+    {%- for field in enum.fields %}
+    {{ field.name }} = {{ field.index }}
+    {%- endfor %}
+
+{% endfor %}
 {% for message in proto_define.messages.values() %}
 class {{ message.name }}(BaseModel):
+    {%- if message.fields %}
     {%- for field in message.fields %}
     {{ field.name }}: {{ field.type }}
     {%- endfor %}
+    {% else %}
+    pass
+    {% endif %}
 {% endfor %}
 {% for service in proto_define.services %}
 class {{ service.name }}Client:
@@ -275,10 +289,11 @@ class ClientBuilder:
         self._proto_define = ProtoDefine(
             package=package, services=[], messages={}, enums={}
         )
+        self.pb2 = grpc.protos(self._proto_define.package)
+        self._proto_package = self.pb2.DESCRIPTOR.package
 
     def get_proto(self):
-        pb2 = grpc.protos(self._proto_define.package)
-        for service in pb2.DESCRIPTOR.services_by_name.values():
+        for service in self.pb2.DESCRIPTOR.services_by_name.values():
             self.add_service(service)
         return self._proto_define
 
@@ -306,27 +321,32 @@ class ClientBuilder:
             srv.methods.append(proto_method)
         return self
 
+    def _gen_class_name(self, name: str) -> str:
+        return "_".join(name.removeprefix(f"{self._proto_package}.").split("."))
+
     def convert_message(self, message: Descriptor) -> ProtoStruct:
         if message in self._proto_define.messages:
             return self._proto_define.messages[message]
-        schema = ProtoStruct(name=message.name, fields=[])
+        name = self._gen_class_name(message.full_name)
+        schema = ProtoStruct(name=name, fields=[])
         for i, field in enumerate(message.fields):
             type_name = self._get_type_name(field)
             schema.fields.append(ProtoField(name=field.name, type=type_name, index=i))
         self._proto_define.messages[message] = schema
         return schema
 
-    def convert_enum(self, schema: EnumDescriptor):
-        if schema in self._proto_define.enums:
-            return self._proto_define.enums[schema]
+    def convert_enum(self, enum_meta: EnumDescriptor):
+        if enum_meta in self._proto_define.enums:
+            return self._proto_define.enums[enum_meta]
+        name = self._gen_class_name(enum_meta.full_name)
         enum_struct = ProtoStruct(
-            name=schema.name,
+            name=name,
             fields=[
                 ProtoField(name=name, index=value.index)
-                for name, value in schema.values_by_name.items()
+                for name, value in enum_meta.values_by_name.items()
             ],
         )
-        self._proto_define.enums[schema] = enum_struct
+        self._proto_define.enums[enum_meta] = enum_struct
         return enum_struct
 
     def _get_type_name(self, field: FieldDescriptor) -> str:
@@ -382,9 +402,7 @@ class ClientBuilder:
 
 
 def proto_to_python_client(proto_path: str):
-    pb2 = grpc.protos(proto_path)
+    protoc_compile(Path(proto_path))
     builder = ClientBuilder(proto_path)
-    for name, service in pb2.DESCRIPTOR.services_by_name.items():
-        builder.add_service(service)
     proto_define = builder.get_proto()
     return proto_define.render_python_file()

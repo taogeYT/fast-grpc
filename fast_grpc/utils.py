@@ -19,6 +19,8 @@ from typing import (
     get_args,
     AsyncIterable,
     ForwardRef,
+    Optional,
+    Sequence,
 )
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
@@ -201,20 +203,26 @@ def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:
     return typed_signature
 
 
-def to_pascal_case(snake_str: str) -> str:
+def to_pascal_case(snake_str: str, delimiter="_") -> str:
     """
     Convert a snake_case string to PascalCase.
 
     Args:
         snake_str (str): The snake_case string to convert.
+        delimiter: The delimiter to convert the string to.
 
     Returns:
         str: The PascalCase version of the string.
     """
-    return "".join(x.capitalize() for x in snake_str.split("_"))
+    return "".join(x.capitalize() for x in snake_str.split(delimiter))
 
 
-def protoc_compile(proto: Path, python_out=".", grpc_python_out="."):
+def protoc_compile(
+    proto: Path,
+    python_out=".",
+    grpc_python_out=".",
+    proto_paths: Optional[Sequence[str]] = None,
+):
     """
     python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. -I. demo.proto
     """
@@ -235,6 +243,8 @@ def protoc_compile(proto: Path, python_out=".", grpc_python_out="."):
         f"--grpc_python_out={grpc_python_out}",
         "-I.",
     ]
+    if proto_paths is not None:
+        protoc_args.extend([f"-I{p}" for p in proto_paths])
     for file in proto_files:
         protoc_args.append(file)
     status_code = subprocess.call(protoc_args)
