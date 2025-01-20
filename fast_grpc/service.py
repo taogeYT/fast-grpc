@@ -1,5 +1,4 @@
 import inspect
-import typing
 from enum import Enum
 from pathlib import Path
 from typing import (
@@ -17,7 +16,7 @@ from typing import (
 from logzero import logger
 from pydantic import BaseModel
 import grpc
-from abc import ABC
+from abc import ABC, abstractmethod
 from google.protobuf.message import Message
 
 from fast_grpc.context import ServiceContext
@@ -184,30 +183,38 @@ MethodType = Union[
 ]
 
 
-class Service:
-    """
-    define a grpc service
-    """
-    def __init__(self, name: str, proto: str = ""):
+class BaseService(ABC):
+    """Base class for all gRPC services"""
+
+    def __init__(self, name: str):
         """
         Args:
             name: your grpc service name.
-            proto: grpc proto file path.
         """
-        if proto and not proto.endswith(".proto"):
-            raise ValueError("Service proto must end with '.proto'")
         self.name: str = name
-        self.proto: str = proto
         self.methods: Dict[str, MethodType] = {}
         self.grpc_servicer = None
+
+    @abstractmethod
+    def import_pb_modules(self):
+        """Import or return pb2 and pb2_grpc modules"""
+        pass
 
     @property
     def interface_name(self):
         return f"{self.name}Servicer"
 
     @property
-    def proto_path(self):
-        return Path(self.proto)
+    @abstractmethod
+    def full_name(self) -> str:
+        """Return the unique identifier of the service"""
+        pass
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(name={self.full_name})"
+
+    def copy(self):
+        return self.__class__(self.name)
 
     def add_method(
         self,
@@ -311,29 +318,73 @@ class Service:
 
         return decorator
 
-    def __str__(self):
-        return f"{self.__class__.__name__}(name={self.name}, proto={self.proto})"
-
     def add_to_server(self, server):
         if self.grpc_servicer is not None:
             logger.info("Service already bound to server")
             return None
-        name = self.name
-        proto = self.proto_path
-        methods = self.methods
-        if not methods:
+
+        if not self.methods:
             logger.info(f"{self} add_to_server [Ignored] -> no methods")
             return None
-        interface_name = f"{name}Servicer"
-        pb2, pb2_grpc = import_proto_file(proto)
-        interface_class = getattr(pb2_grpc, interface_name)
+
+        pb2, pb2_grpc = self.import_pb_modules()
+        interface_class = getattr(pb2_grpc, self.interface_name)
         self.grpc_servicer = make_grpc_service_from_methods(
-            pb2, name, interface_class, methods
+            pb2, self.name, interface_class, self.methods
         )
-        pb2_grpc_add_func = getattr(pb2_grpc, f"add_{interface_name}_to_server")
+        pb2_grpc_add_func = getattr(pb2_grpc, f"add_{self.interface_name}_to_server")
         pb2_grpc_add_func(self.grpc_servicer(), server)
         logger.info(f"{self} add_to_server success")
-        return self.grpc_servicer
+
+
+class Service(BaseService):
+    """Service implementation using proto file"""
+
+    def __init__(self, name: str, proto: str = ""):
+        """
+        Args:
+            name: your grpc service name.
+            proto: grpc proto file path.
+        """
+        super().__init__(name)
+        if proto and not proto.endswith(".proto"):
+            raise ValueError("Service proto must end with '.proto'")
+        self.proto: str = proto
+
+    def import_pb_modules(self):
+        return import_proto_file(Path(self.proto))
+
+    @property
+    def full_name(self):
+        return f"{self.proto}:{self.name}"
+
+    def copy(self):
+        return self.__class__(self.name, self.proto)
+
+
+class Pb2Service(BaseService):
+    """Service implementation using pb2 modules"""
+
+    def __init__(self, name: str, pb2_module, pb2_grpc_module):
+        """
+        Args:
+            name: your grpc service name
+            pb2_module: the pb2 module containing your service definitions
+            pb2_grpc_module: the pb2_grpc module containing your service implementations
+        """
+        super().__init__(name)
+        self.pb2_module = pb2_module
+        self.pb2_grpc_module = pb2_grpc_module
+
+    def import_pb_modules(self):
+        return self.pb2_module, self.pb2_grpc_module
+
+    @property
+    def full_name(self):
+        return f"{self.pb2_module.__name__}:{self.name}"
+
+    def copy(self):
+        return self.__class__(self.name, self.pb2_module, self.pb2_grpc_module)
 
 
 def make_grpc_service_from_methods(
@@ -371,9 +422,3 @@ def make_grpc_service_from_methods(
         (interface_class,),
         {name: create_method(method) for name, method in methods.items()},
     )
-
-
-class Servicer:
-    @classmethod
-    def as_service(cls, proto: typing.Optional[str] = None):
-        pass
