@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from pathlib import Path
 from typing import Callable, Optional, Type
 
 import grpc
@@ -15,6 +16,7 @@ from fast_grpc.service import (
     UnaryStreamMethod,
     StreamUnaryMethod,
     StreamStreamMethod,
+    BaseService,
 )
 from fast_grpc.utils import protoc_compile
 
@@ -52,13 +54,12 @@ class FastGRPC(object):
     def setup(self) -> None:
         builders = {}
         for service in self._services.values():
-            if not service.methods:
+            if not service.methods or not isinstance(service, Service):
                 continue
-            if service.proto_path not in builders:
-                builders[service.proto_path] = ProtoBuilder(
-                    package=service.proto_path.stem
-                )
-            builders[service.proto_path].add_service(service)
+            path = Path(service.proto)
+            if path not in builders:
+                builders[path] = ProtoBuilder(package=path.stem)
+            builders[path].add_service(service)
         for proto, builder in builders.items():
             if self._auto_gen_proto:
                 proto_define = builder.get_proto()
@@ -174,28 +175,22 @@ class FastGRPC(object):
         port: int = 50051,
         server: Optional[Server] = None,
     ) -> None:
-        self.setup()
         server = grpc.aio.server() if not server else server
-        for service in self._services.values():
-            service.add_to_server(server)
+        self.add_to_server(server)
         server.add_insecure_port(f"{host}:{port}")
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")
         await server.wait_for_termination()
 
-    def add_service(self, service: Service):
-        if not service.proto:
-            service.proto = self.service.proto
-        path_name = f"{service.proto}:{service.name}"
-        if path_name not in self._services:
-            self._services[path_name] = Service(name=service.name, proto=service.proto)
-        self._services[path_name].methods.update(service.methods)
+    def add_service(self, service: BaseService) -> None:
+        if isinstance(service, Service):
+            if not service.proto:
+                service.proto = self.service.proto
+        if service.full_name not in self._services:
+            self._services[service.full_name] = service.copy()
+        self._services[service.full_name].methods.update(service.methods)
 
     def add_to_server(self, server: Server):
-        grpc_services = []
         self.setup()
         for service in self._services.values():
-            grpc_srv = service.add_to_server(server)
-            if grpc_srv:
-                grpc_services.append(grpc_srv)
-        return grpc_services
+            service.add_to_server(server)
