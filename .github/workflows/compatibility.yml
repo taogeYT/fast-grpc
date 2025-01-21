@@ -1,0 +1,60 @@
+name: Compatibility Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+        include:
+          # Test latest versions
+          - python-version: '3.11'
+            protobuf-version: '4.23.4'
+            grpcio-version: '1.54.2'
+          # Test minimum supported versions
+          - python-version: '3.7'
+            protobuf-version: '3.20.3'
+            grpcio-version: '1.51.3'
+          # Test some common combinations
+          - python-version: '3.9'
+            protobuf-version: '4.21.12'
+            grpcio-version: '1.52.0'
+          - python-version: '3.10'
+            protobuf-version: '4.22.3'
+            grpcio-version: '1.53.0'
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install poetry==1.8.3
+        pip install protobuf==${{ matrix.protobuf-version }}
+        pip install grpcio==${{ matrix.grpcio-version }}
+        poetry install
+
+    - name: Run tests
+      run: |
+        pytest tests/ -v
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-results-${{ matrix.python-version }}-pb${{ matrix.protobuf-version }}-grpc${{ matrix.grpcio-version }}
+        path: |
+          .pytest_cache
+          test-results.xml
