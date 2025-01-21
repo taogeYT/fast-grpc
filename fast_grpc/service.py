@@ -25,9 +25,10 @@ from fast_grpc.utils import (
     import_proto_file,
     get_typed_signature,
     to_pascal_case,
-    json_to_message,
     get_param_annotation_model,
     message_to_str,
+    message_to_pydantic,
+    pydantic_to_message,
 )
 
 T = TypeVar("T")
@@ -99,12 +100,12 @@ class BaseMethod(ABC):
 
             async def validate_async_iterator_request():
                 async for item in request:
-                    yield self.request_model.model_validate(item, from_attributes=True)
+                    yield message_to_pydantic(item, self.request_model)
 
             values[self.request_param.name] = validate_async_iterator_request()
         else:
-            values[self.request_param.name] = self.request_model.model_validate(
-                request, from_attributes=True
+            values[self.request_param.name] = message_to_pydantic(
+                request, self.request_model
             )
         return values
 
@@ -114,10 +115,7 @@ class BaseMethod(ABC):
 
         if self.response_model:
             validated_response = self.response_model.model_validate(response)
-            return json_to_message(
-                validated_response.model_dump_json(),
-                context.output_type,
-            )
+            return pydantic_to_message(validated_response, context.output_type)
         if isinstance(response, dict):
             return dict_to_message(response, context.output_type)
         return response
