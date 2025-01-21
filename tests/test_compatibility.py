@@ -41,6 +41,7 @@ def test_import_proto_file():
         assert hasattr(pb2_grpc, "TestServiceServicer")
         assert hasattr(pb2_grpc, "TestServiceStub")
         assert hasattr(pb2_grpc, "add_TestServiceServicer_to_server")
+        # message_to_dict(msg)
 
     finally:
         proto_file.unlink(missing_ok=True)
