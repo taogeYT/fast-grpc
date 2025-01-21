@@ -13,14 +13,6 @@ jobs:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
         include:
-          # Test latest versions
-          - python-version: '3.11'
-            protobuf-version: '4.23.4'
-            grpcio-version: '1.54.2'
-          # Test minimum supported versions
-          - python-version: '3.7'
-            protobuf-version: '3.20.3'
-            grpcio-version: '1.51.3'
           # Test some common combinations
           - python-version: '3.9'
             protobuf-version: '4.21.12'
@@ -28,6 +20,10 @@ jobs:
           - python-version: '3.10'
             protobuf-version: '4.22.3'
             grpcio-version: '1.53.0'
+          # Test latest versions
+          - python-version: '3.11'
+            protobuf-version: '4.23.4'
+            grpcio-version: '1.54.2'
       fail-fast: false
 
     steps:
@@ -48,13 +44,4 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest tests/ -v
-
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-        name: test-results-${{ matrix.python-version }}-pb${{ matrix.protobuf-version }}-grpc${{ matrix.grpcio-version }}
-        path: |
-          .pytest_cache
-          test-results.xml
+        poetry run pytest tests -v
