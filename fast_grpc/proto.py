@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import typing
 from enum import IntEnum
 from pathlib import Path
 from typing import Type, Sequence, Any
@@ -266,6 +267,9 @@ class ProtoBuilder:
     def _get_type_name(self, type_: type) -> str:
         origin = get_origin(type_)
         args = get_args(type_)
+        if origin is typing.Union:
+            _args = [i for i in args if i is not type(None)]
+            return self._get_type_name(_args[0])
         if origin is None:
             if issubclass(type_, BaseModel):
                 message = self.convert_message(type_)
