@@ -21,7 +21,6 @@ from google.protobuf.message import Message
 
 from fast_grpc.context import ServiceContext
 from fast_grpc.utils import (
-    message_to_dict,
     dict_to_message,
     import_proto_file,
     get_typed_signature,
@@ -100,12 +99,12 @@ class BaseMethod(ABC):
 
             async def validate_async_iterator_request():
                 async for item in request:
-                    yield self.request_model.model_validate(message_to_dict(item))
+                    yield self.request_model.model_validate(item, from_attributes=True)
 
             values[self.request_param.name] = validate_async_iterator_request()
         else:
             values[self.request_param.name] = self.request_model.model_validate(
-                message_to_dict(request)
+                request, from_attributes=True
             )
         return values
 
@@ -140,7 +139,7 @@ class UnaryUnaryMethod(BaseMethod):
             return response
         except Exception as e:
             logger.exception(
-                f"GRPC invoke {context.service_method.__name__}({message_to_str(request)}) [Err] -> {repr(e)}"
+                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [Err] -> {repr(e)}"
             )
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
@@ -167,7 +166,7 @@ class UnaryStreamMethod(BaseMethod):
             )
         except Exception as e:
             logger.exception(
-                f"GRPC invoke {context.service_method.__name__}({message_to_str(request)}) [Err] -> {repr(e)}"
+                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [Err] -> {repr(e)}"
             )
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
