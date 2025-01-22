@@ -34,7 +34,7 @@ from fast_grpc.types import (
     Uint64,
     UInt64Value,
 )
-from fast_grpc.utils import protoc_compile
+from fast_grpc.utils import protoc_compile, camel_to_snake
 
 _base_types = {
     bytes: "bytes",
@@ -70,16 +70,6 @@ PROTO_TEMPLATE = """
 syntax = "proto3";
 
 package {{ proto_define.package }};
-
-{% for service in proto_define.services %}
-service {{ service.name }} {
-    {% for method in service.methods -%}
-    rpc {{ method.name }}({{ method.request }}) returns ({{ method.response }});
-    {%- if not loop.last %}
-    {% endif %}
-    {%- endfor %}
-}
-{% endfor %}
 {% for enum in proto_define.enums.values() %}
 enum {{ enum.name }} {
     {% for field in enum.fields -%}
@@ -98,6 +88,15 @@ message {{ message.name }} {
     {%- endfor %}
 }
 {% endfor %}
+{% for service in proto_define.services %}
+service {{ service.name }} {
+    {% for method in service.methods -%}
+    rpc {{ method.name }}({{ method.request }}) returns ({{ method.response }});
+    {%- if not loop.last %}
+    {% endif %}
+    {%- endfor %}
+}
+{% endfor %}
 """
 PYTHON_TEMPLATE = """
 import grpc
@@ -111,7 +110,6 @@ class {{ enum.name }}(IntEnum):
     {%- for field in enum.fields %}
     {{ field.name }} = {{ field.index }}
     {%- endfor %}
-
 {% endfor %}
 {% for message in proto_define.messages.values() %}
 class {{ message.name }}(BaseModel):
@@ -121,7 +119,7 @@ class {{ message.name }}(BaseModel):
     {%- endfor %}
     {% else %}
     pass
-    {% endif %}
+    {%- endif %}
 {% endfor %}
 {% for service in proto_define.services %}
 class {{ service.name }}Client:
@@ -255,10 +253,17 @@ class ProtoBuilder:
     def convert_enum(self, schema: Type[IntEnum]):
         if schema in self._proto_define.enums:
             return self._proto_define.enums[schema]
+        member_prefix = camel_to_snake(schema.__name__).upper()
         enum_struct = ProtoStruct(
             name=schema.__name__,
             fields=[
-                ProtoField(name=member.name, index=member.value) for member in schema
+                ProtoField(
+                    name=member.name
+                    if member.name.startswith(member_prefix)
+                    else f"{member_prefix}_{member.name}",
+                    index=member.value,
+                )
+                for member in schema
             ],
         )
         self._proto_define.enums[schema] = enum_struct
@@ -343,10 +348,14 @@ class ClientBuilder:
         if enum_meta in self._proto_define.enums:
             return self._proto_define.enums[enum_meta]
         name = self._gen_class_name(enum_meta.full_name)
+        member_prefix = camel_to_snake(name).upper()
         enum_struct = ProtoStruct(
             name=name,
             fields=[
-                ProtoField(name=name, index=value.index)
+                ProtoField(
+                    name=name.removeprefix(member_prefix).removeprefix("_"),
+                    index=value.index,
+                )
                 for name, value in enum_meta.values_by_name.items()
             ],
         )

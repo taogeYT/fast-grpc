@@ -24,7 +24,7 @@ from fast_grpc.utils import (
     dict_to_message,
     import_proto_file,
     get_typed_signature,
-    to_pascal_case,
+    snake_to_camel,
     get_param_annotation_model,
     message_to_str,
     message_to_pydantic,
@@ -54,7 +54,7 @@ class BaseMethod(ABC):
         response_model: Optional[Type[BaseModel]] = None,
         description: str = "",
     ):
-        self.name = name or to_pascal_case(endpoint.__name__)
+        self.name = name or snake_to_camel(endpoint.__name__)
         self.endpoint = endpoint
         self.request_model = request_model
         self.response_model = response_model
