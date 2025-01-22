@@ -78,10 +78,12 @@ def camel_to_snake(name):
     """
     Replace uppercase letters with _+lowercase letters, for example "FastGRPC" -> "fast_grpc"
     """
-    snake_case_str = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
-    if snake_case_str.startswith("_"):
-        snake_case_str = snake_case_str[1:]
-    return snake_case_str
+    # 在小写字母和大写字母的边界添加下划线（避免全大写被逐字母拆分）
+    name = re.sub(r"(?<=[a-z])(?=[A-Z])", "_", name)
+    # 将连续的大写字母拆分成单词，但保留整体（如HTTP保持不被逐字母拆分）
+    name = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", name)
+    # 转为小写
+    return name.lower()
 
 
 def snake_to_camel(name):
@@ -203,20 +205,6 @@ def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:
         return_annotation=get_typed_annotation(signature.return_annotation, _globals),
     )
     return typed_signature
-
-
-def to_pascal_case(snake_str: str, delimiter="_") -> str:
-    """
-    Convert a snake_case string to PascalCase.
-
-    Args:
-        snake_str (str): The snake_case string to convert.
-        delimiter: The delimiter to convert the string to.
-
-    Returns:
-        str: The PascalCase version of the string.
-    """
-    return "".join(x.capitalize() for x in snake_str.split(delimiter))
 
 
 def protoc_compile(

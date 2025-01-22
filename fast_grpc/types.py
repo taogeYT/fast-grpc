@@ -13,6 +13,7 @@ from typing import (
 
 from pydantic import conint
 from pydantic import BaseModel
+from typing_extensions import TypeAlias
 
 from fast_grpc.context import ServiceContext
 
@@ -24,11 +25,12 @@ Method = Callable[
 ]
 MetadataType = Sequence[Tuple[str, Union[str, bytes]]]
 
-Uint32 = conint(ge=0, lt=2**32)
-Uint64 = conint(ge=0, lt=2**64)
-Int32 = conint(ge=-(2**31), lt=2**31)
-Int64 = conint(ge=-(2**63), lt=2**63)
-Double = float
+Uint32: TypeAlias = conint(ge=0, lt=2**32)
+Uint64: TypeAlias = conint(ge=0, lt=2**64)
+Int32: TypeAlias = conint(ge=-(2**31), lt=2**31)
+Int64: TypeAlias = conint(ge=-(2**63), lt=2**63)
+Double: TypeAlias = float
+
 
 T = TypeVar("T", bytes, int, str, bool, float)
 
