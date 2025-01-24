@@ -17,23 +17,7 @@ from google.protobuf.descriptor import (
 )
 
 from fast_grpc.service import Service, MethodMode
-from fast_grpc.types import Empty
-from fast_grpc.types import (
-    BoolValue,
-    BytesValue,
-    Double,
-    DoubleValue,
-    FloatValue,
-    Int32,
-    Int32Value,
-    Int64,
-    Int64Value,
-    StringValue,
-    Uint32,
-    UInt32Value,
-    Uint64,
-    UInt64Value,
-)
+from fast_grpc.types import Empty, ProtoTag
 from fast_grpc.utils import protoc_compile, camel_to_snake
 
 _base_types = {
@@ -46,23 +30,6 @@ _base_types = {
     # Date and time
     datetime.datetime: "string",
     str: "string",
-    Uint32: "uint32",
-    Uint64: "uint64",
-    Int32: "int32",
-    Int64: "int64",
-    Double: "double",
-}
-
-_wrapper_types = {
-    BoolValue: "google.protobuf.BoolValue",
-    BytesValue: "google.protobuf.BytesValue",
-    DoubleValue: "google.protobuf.DoubleValue",
-    FloatValue: "google.protobuf.FloatValue",
-    Int32Value: "google.protobuf.Int32Value",
-    Int64Value: "google.protobuf.Int64Value",
-    StringValue: "google.protobuf.StringValue",
-    UInt32Value: "google.protobuf.UInt32Value",
-    UInt64Value: "google.protobuf.UInt64Value",
 }
 
 # 定义 Jinja2 模板
@@ -245,7 +212,7 @@ class ProtoBuilder:
             return self._proto_define.messages[schema]
         message = ProtoStruct(name=generate_type_name(schema), fields=[])
         for i, (name, field) in enumerate(schema.model_fields.items(), 1):
-            type_name = self._get_type_name(field.annotation)
+            type_name = self._get_type_name(field.annotation, field.metadata)
             message.fields.append(ProtoField(name=name, type=type_name, index=i))
         self._proto_define.messages[schema] = message
         return message
@@ -269,9 +236,14 @@ class ProtoBuilder:
         self._proto_define.enums[schema] = enum_struct
         return enum_struct
 
-    def _get_type_name(self, type_: type) -> str:
+    def _get_type_name(self, type_: Any, metadata: Sequence[Any] = tuple()) -> str:
         origin = get_origin(type_)
         args = get_args(type_)
+        for tag in metadata:
+            if isinstance(tag, ProtoTag):
+                return tag.name
+        if origin is typing.Annotated:
+            return self._get_type_name(args[0], args[1:])
         if origin is typing.Union:
             _args = [i for i in args if i is not type(None)]
             return self._get_type_name(_args[0])

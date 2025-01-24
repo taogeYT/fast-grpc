@@ -2,17 +2,15 @@
 from typing import (
     Awaitable,
     Callable,
-    Generic,
-    Optional,
     TypeVar,
     Sequence,
     Tuple,
     Union,
     AsyncIterable,
+    Annotated,
 )
 
-from pydantic import conint
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import TypeAlias
 
 from fast_grpc.context import ServiceContext
@@ -25,30 +23,19 @@ Method = Callable[
 ]
 MetadataType = Sequence[Tuple[str, Union[str, bytes]]]
 
-Uint32: TypeAlias = conint(ge=0, lt=2**32)
-Uint64: TypeAlias = conint(ge=0, lt=2**64)
-Int32: TypeAlias = conint(ge=-(2**31), lt=2**31)
-Int64: TypeAlias = conint(ge=-(2**63), lt=2**63)
-Double: TypeAlias = float
-
-
-T = TypeVar("T", bytes, int, str, bool, float)
-
-
-class WrapperValue(BaseModel, Generic[T]):
-    value: T
-
-
-DoubleValue = Optional[WrapperValue[Double]]
-FloatValue = Optional[WrapperValue[float]]
-Int64Value = Optional[WrapperValue[Int64]]
-UInt64Value = Optional[WrapperValue[Uint64]]
-Int32Value = Optional[WrapperValue[Int32]]
-UInt32Value = Optional[WrapperValue[Uint32]]
-BoolValue = Optional[WrapperValue[bool]]
-StringValue = Optional[WrapperValue[str]]
-BytesValue = Optional[WrapperValue[bytes]]
-
 
 class Empty(BaseModel):
     pass
+
+
+class ProtoTag:
+    def __init__(self, name: str, package: str = ""):
+        self.name = name
+        self.package = package
+
+
+Uint32: TypeAlias = Annotated[int, Field(ge=0, lt=2**32), ProtoTag(name="uint32")]
+Uint64: TypeAlias = Annotated[int, Field(ge=0, lt=2**64), ProtoTag(name="uint64")]
+Int32: TypeAlias = Annotated[int, Field(ge=-(2**31), lt=2**31), ProtoTag(name="int32")]
+Int64: TypeAlias = Annotated[int, Field(ge=-(2**63), lt=2**63), ProtoTag(name="int64")]
+Double: TypeAlias = Annotated[float, ProtoTag(name="double")]
