@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Type, Sequence, Any
 
 import grpc
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import get_args, get_origin
 from jinja2 import Template
 from google.protobuf.descriptor import (
@@ -17,23 +17,7 @@ from google.protobuf.descriptor import (
 )
 
 from fast_grpc.service import Service, MethodMode
-from fast_grpc.types import Empty
-from fast_grpc.types import (
-    BoolValue,
-    BytesValue,
-    Double,
-    DoubleValue,
-    FloatValue,
-    Int32,
-    Int32Value,
-    Int64,
-    Int64Value,
-    StringValue,
-    Uint32,
-    UInt32Value,
-    Uint64,
-    UInt64Value,
-)
+from fast_grpc.types import Empty, ProtoTag, PYTHON_TO_PROTOBUF_TYPES
 from fast_grpc.utils import protoc_compile, camel_to_snake
 
 _base_types = {
@@ -46,23 +30,6 @@ _base_types = {
     # Date and time
     datetime.datetime: "string",
     str: "string",
-    Uint32: "uint32",
-    Uint64: "uint64",
-    Int32: "int32",
-    Int64: "int64",
-    Double: "double",
-}
-
-_wrapper_types = {
-    BoolValue: "google.protobuf.BoolValue",
-    BytesValue: "google.protobuf.BytesValue",
-    DoubleValue: "google.protobuf.DoubleValue",
-    FloatValue: "google.protobuf.FloatValue",
-    Int32Value: "google.protobuf.Int32Value",
-    Int64Value: "google.protobuf.Int64Value",
-    StringValue: "google.protobuf.StringValue",
-    UInt32Value: "google.protobuf.UInt32Value",
-    UInt64Value: "google.protobuf.UInt64Value",
 }
 
 # 定义 Jinja2 模板
@@ -70,6 +37,11 @@ PROTO_TEMPLATE = """
 syntax = "proto3";
 
 package {{ proto_define.package }};
+{% for depend in proto_define.dependencies %}
+{%- if depend %}
+import "{{ depend }}";
+{%- endif %}
+{%- endfor %}
 {% for enum in proto_define.enums.values() %}
 enum {{ enum.name }} {
     {% for field in enum.fields -%}
@@ -172,6 +144,7 @@ class ProtoDefine(BaseModel):
     services: list[ProtoService]
     messages: dict[Any, ProtoStruct]
     enums: dict[Any, ProtoStruct]
+    dependencies: set[str] = Field(default_factory=set)
 
     def render(self, proto_template) -> str:
         template = Template(proto_template)
@@ -192,6 +165,8 @@ def generate_type_name(type_: type) -> str:
     """
     if not isinstance(type_, type):
         raise ValueError(f"'{type_}' must be a type")
+    if type_ in (bytes, int, float, bool, str, datetime.datetime):
+        return type_.__name__.capitalize()
     origin = get_origin(type_)
     args = get_args(type_)
     if origin is None:
@@ -204,15 +179,12 @@ def generate_type_name(type_: type) -> str:
             return "".join(type_names + [origin.__name__])
         if issubclass(type_, IntEnum):
             return type_.__name__
-        if not issubclass(type_, tuple(_base_types)):
-            raise ValueError(f"Unsupported type: {type_}")
-        return type_.__name__.capitalize()
     else:
         if issubclass(origin, Sequence):
             return f"{generate_type_name(args[0])}List"
         if issubclass(origin, dict):
             return f"{generate_type_name(args[0])}{generate_type_name(args[1])}Dict"
-        raise ValueError(f"Unsupported type: {type_}")
+    raise ValueError(f"Unsupported type: {type_}")
 
 
 class ProtoBuilder:
@@ -244,8 +216,8 @@ class ProtoBuilder:
         if schema in self._proto_define.messages:
             return self._proto_define.messages[schema]
         message = ProtoStruct(name=generate_type_name(schema), fields=[])
-        for i, (name, field) in enumerate(schema.model_fields.items(), 1):
-            type_name = self._get_type_name(field.annotation)
+        for i, name in enumerate(schema.model_fields.keys(), 1):
+            type_name = self._get_type_name(schema.__annotations__[name])
             message.fields.append(ProtoField(name=name, type=type_name, index=i))
         self._proto_define.messages[schema] = message
         return message
@@ -269,9 +241,19 @@ class ProtoBuilder:
         self._proto_define.enums[schema] = enum_struct
         return enum_struct
 
-    def _get_type_name(self, type_: type) -> str:
+    def _get_type_name(self, type_: Any) -> str:
         origin = get_origin(type_)
         args = get_args(type_)
+        if type_ in PYTHON_TO_PROTOBUF_TYPES:
+            tag = PYTHON_TO_PROTOBUF_TYPES[type_]
+            self._proto_define.dependencies.add(tag.package)
+            return tag.name
+        if origin is typing.Annotated:
+            for tag in args[1:]:
+                if isinstance(tag, ProtoTag):
+                    self._proto_define.dependencies.add(tag.package)
+                    return tag.name
+            return self._get_type_name(args[0])
         if origin is typing.Union:
             _args = [i for i in args if i is not type(None)]
             return self._get_type_name(_args[0])
@@ -282,15 +264,12 @@ class ProtoBuilder:
             if issubclass(type_, IntEnum):
                 struct = self.convert_enum(type_)
                 return struct.name
-            if not issubclass(type_, tuple(_base_types)):
-                raise ValueError(f"Unsupported type: {type_}")
-            return _base_types[type_]
         else:
             if issubclass(origin, Sequence):
                 return f"repeated {self._get_type_name(args[0])}"
             if issubclass(origin, dict):
                 return f"map <{self._get_type_name(args[0])}, {self._get_type_name(args[1])}>"
-            raise ValueError(f"Unsupported type: {type_}")
+        raise ValueError(f"Unsupported type: {type_}")
 
 
 class ClientBuilder:
