@@ -12,7 +12,7 @@ class ServiceContext:
         self.input_type = method_descriptor.input_type._concrete_class
         self.output_type = method_descriptor.output_type._concrete_class
         self._start_time = time.time()
-        self._metadata = {}
+        self._metadata: dict[str, str] = {}
 
     @property
     def elapsed_time(self):
