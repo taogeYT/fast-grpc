@@ -3,7 +3,7 @@ import datetime
 import typing
 from enum import IntEnum
 from pathlib import Path
-from typing import Type, Sequence, Any
+from typing import Type, Sequence, Any, Annotated
 
 import grpc
 from pydantic import BaseModel, Field
@@ -216,8 +216,13 @@ class ProtoBuilder:
         if schema in self._proto_define.messages:
             return self._proto_define.messages[schema]
         message = ProtoStruct(name=generate_type_name(schema), fields=[])
-        for i, name in enumerate(schema.model_fields.keys(), 1):
-            type_name = self._get_type_name(schema.__annotations__[name])
+        for i, (name, field) in enumerate(schema.model_fields.items(), 1):
+            if field.metadata:
+                _args = (field.annotation,) + tuple(field.metadata)
+                field_type = Annotated[_args]  # type: ignore
+            else:
+                field_type = field.annotation  # type: ignore
+            type_name = self._get_type_name(field_type)
             message.fields.append(ProtoField(name=name, type=type_name, index=i))
         self._proto_define.messages[schema] = message
         return message
@@ -242,12 +247,14 @@ class ProtoBuilder:
         return enum_struct
 
     def _get_type_name(self, type_: Any) -> str:
-        origin = get_origin(type_)
-        args = get_args(type_)
+        if isinstance(type_, str):
+            return type_
         if type_ in PYTHON_TO_PROTOBUF_TYPES:
             tag = PYTHON_TO_PROTOBUF_TYPES[type_]
             self._proto_define.dependencies.add(tag.package)
             return tag.name
+        origin = get_origin(type_)
+        args = get_args(type_)
         if origin is typing.Annotated:
             for tag in args[1:]:
                 if isinstance(tag, ProtoTag):
