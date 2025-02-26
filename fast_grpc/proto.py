@@ -286,10 +286,17 @@ class ClientBuilder:
         )
         self.pb2 = grpc.protos(self._proto_define.package)
         self._proto_package = self.pb2.DESCRIPTOR.package
+        self._processed_messages = []
+        self._processing_stack = set()
 
     def get_proto(self):
         for service in self.pb2.DESCRIPTOR.services_by_name.values():
             self.add_service(service)
+        messages = {}
+        for message in self._processed_messages:
+            if message not in messages:
+                messages[message] = self._proto_define.messages[message]
+        self._proto_define.messages = messages
         return self._proto_define
 
     def add_service(self, service: ServiceDescriptor):
@@ -324,10 +331,13 @@ class ClientBuilder:
             return self._proto_define.messages[message]
         name = self._gen_class_name(message.full_name)
         schema = ProtoStruct(name=name, fields=[])
+        self._proto_define.messages[message] = schema
+        self._processing_stack.add(message)
         for i, field in enumerate(message.fields):
             type_name = self._get_type_name(field)
             schema.fields.append(ProtoField(name=field.name, type=type_name, index=i))
-        self._proto_define.messages[message] = schema
+        self._processing_stack.remove(message)
+        self._processed_messages.append(message)
         return schema
 
     def convert_enum(self, enum_meta: EnumDescriptor):
@@ -360,6 +370,8 @@ class ClientBuilder:
         def get_base_type() -> str:
             if field.type == FieldDescriptor.TYPE_MESSAGE:
                 message = self.convert_message(field.message_type)
+                if field.message_type in self._processing_stack:
+                    return f"'{message.name}'"
                 return message.name
             elif field.type == FieldDescriptor.TYPE_ENUM:
                 struct = self.convert_enum(field.enum_type)
