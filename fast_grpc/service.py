@@ -1,3 +1,4 @@
+import functools
 import inspect
 from enum import Enum
 from pathlib import Path
@@ -315,7 +316,8 @@ class BaseService(ABC):
 
         return decorator
 
-    def add_to_server(self, server):
+    def add_to_server(self, server, middlewares=None):
+        _middlewares = middlewares or []
         if self.grpc_servicer is not None:
             logger.info("Service already bound to server")
             return None
@@ -327,11 +329,15 @@ class BaseService(ABC):
         pb2, pb2_grpc = self.import_pb_modules()
         interface_class = getattr(pb2_grpc, self.interface_name)
         self.grpc_servicer = make_grpc_service_from_methods(
-            pb2, self.name, interface_class, self.methods
+            pb2, self.name, interface_class, self.methods, _middlewares
         )
         pb2_grpc_add_func = getattr(pb2_grpc, f"add_{self.interface_name}_to_server")
         pb2_grpc_add_func(self.grpc_servicer(), server)
         logger.info(f"{self} add_to_server success")
+
+    def get_pb_full_name(self):
+        pb2, _ = self.import_pb_modules()
+        return pb2.DESCRIPTOR.services_by_name[self.name].full_name
 
 
 class Service(BaseService):
@@ -389,6 +395,7 @@ def make_grpc_service_from_methods(
     service_name,
     interface_class,
     methods: Dict[str, MethodType],
+    middlewares: list[Callable],
 ):
     def create_method(method: MethodType):
         if method.name not in service_descriptor.methods_by_name:
@@ -405,10 +412,13 @@ def make_grpc_service_from_methods(
             service_iterable_method.__name__ = method.name
             return service_iterable_method
         else:
+            rpc_method = method.__call__
+            for middleware in reversed(middlewares):
+                rpc_method = functools.partial(middleware, rpc_method)
 
             async def service_method(self, request, context):
                 srv_context = ServiceContext(context, method, method_descriptor)
-                return await method(request, srv_context)
+                return await rpc_method(request, srv_context)
 
             service_method.__name__ = method.name
             return service_method
