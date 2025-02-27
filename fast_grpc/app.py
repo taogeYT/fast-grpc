@@ -8,6 +8,7 @@ from grpc.aio._typing import ChannelArgumentType  # noqa
 from grpc.aio import Server
 from logzero import logger
 from pydantic import BaseModel
+from grpc_reflection.v1alpha import reflection
 
 from fast_grpc.proto import ProtoBuilder
 from fast_grpc.service import (
@@ -50,6 +51,7 @@ class FastGRPC(object):
         self.service = Service(name=service_name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{service_name}": self.service}
         self._auto_gen_proto = auto_gen_proto
+        self._middlewares: list[Callable] = []
 
     def setup(self) -> None:
         builders = {}
@@ -68,6 +70,19 @@ class FastGRPC(object):
                 proto.write_text(content)
                 logger.info(f"Created {proto} file success")
             protoc_compile(proto)
+
+    def add_middleware(self, middleware: Callable) -> None:
+        self._middlewares.append(middleware)
+
+    def middleware(self, middleware_type="unary"):
+        if middleware_type != "unary":
+            raise NotImplementedError("middleware_type only support unary")
+
+        def decorator(func: Callable) -> Callable:
+            self.add_middleware(func)
+            return func
+
+        return decorator
 
     def unary_unary(
         self,
@@ -174,10 +189,13 @@ class FastGRPC(object):
         host: str = "127.0.0.1",
         port: int = 50051,
         server: Optional[Server] = None,
+        enable_reflection: bool = True,
     ) -> None:
         server = grpc.aio.server() if not server else server
-        self.add_to_server(server)
         server.add_insecure_port(f"{host}:{port}")
+        self.add_to_server(server)
+        if enable_reflection:
+            self.enable_server_reflection(server)
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")
         await server.wait_for_termination()
@@ -193,4 +211,11 @@ class FastGRPC(object):
     def add_to_server(self, server: Server):
         self.setup()
         for service in self._services.values():
-            service.add_to_server(server)
+            service.add_to_server(server, self._middlewares)
+
+    def enable_server_reflection(self, server: Server):
+        service_names = [
+            service.get_pb_full_name() for service in self._services.values()
+        ]
+        service_names.append(reflection.SERVICE_NAME)
+        reflection.enable_server_reflection(service_names, server)
