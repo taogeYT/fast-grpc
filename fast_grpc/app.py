@@ -189,11 +189,13 @@ class FastGRPC(object):
         host: str = "127.0.0.1",
         port: int = 50051,
         server: Optional[Server] = None,
+        enable_reflection: bool = True,
     ) -> None:
         server = grpc.aio.server() if not server else server
-        self.add_to_server(server)
-        self.enable_server_reflection(server)
         server.add_insecure_port(f"{host}:{port}")
+        self.add_to_server(server)
+        if enable_reflection:
+            self.enable_server_reflection(server)
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")
         await server.wait_for_termination()
