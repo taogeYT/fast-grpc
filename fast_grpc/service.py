@@ -16,7 +16,6 @@ from typing import (
 
 from logzero import logger
 from pydantic import BaseModel
-import grpc
 from abc import ABC, abstractmethod
 from google.protobuf.message import Message
 
@@ -128,21 +127,13 @@ class UnaryUnaryMethod(BaseMethod):
     async def __call__(
         self, request: Union[Message, AsyncIterable[Message]], context: ServiceContext
     ) -> Message:
-        try:
-            values = self.solve_params(request, context)
-            result = await self.endpoint(**values)
-            response = self.serialize_response(result, context)
-            logger.info(
-                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
-            )
-            return response
-        except Exception as e:
-            logger.exception(
-                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [Err] -> {repr(e)}"
-            )
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+        values = self.solve_params(request, context)
+        result = await self.endpoint(**values)
+        response = self.serialize_response(result, context)
+        logger.info(
+            f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
+        )
+        return response
 
 
 class StreamUnaryMethod(UnaryUnaryMethod):
@@ -155,21 +146,13 @@ class UnaryStreamMethod(BaseMethod):
     async def __call__(
         self, request: Union[Message, AsyncIterable[Message]], context: ServiceContext
     ) -> AsyncGenerator[Message, None]:
-        try:
-            values = self.solve_params(request, context)
-            iterator_response = self.endpoint(**values)
-            async for response in iterator_response:
-                yield self.serialize_response(response, context)
-            logger.info(
-                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
-            )
-        except Exception as e:
-            logger.exception(
-                f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [Err] -> {repr(e)}"
-            )
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+        values = self.solve_params(request, context)
+        iterator_response = self.endpoint(**values)
+        async for response in iterator_response:
+            yield self.serialize_response(response, context)
+        logger.info(
+            f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
+        )
 
 
 class StreamStreamMethod(UnaryStreamMethod):
@@ -316,8 +299,11 @@ class BaseService(ABC):
 
         return decorator
 
-    def add_to_server(self, server, middlewares=None):
+    def add_to_server(
+        self, server, middlewares=None, server_streaming_middlewares=None
+    ):
         _middlewares = middlewares or []
+        _server_streaming_middlewares = server_streaming_middlewares or []
         if self.grpc_servicer is not None:
             logger.info("Service already bound to server")
             return None
@@ -329,7 +315,12 @@ class BaseService(ABC):
         pb2, pb2_grpc = self.import_pb_modules()
         interface_class = getattr(pb2_grpc, self.interface_name)
         self.grpc_servicer = make_grpc_service_from_methods(
-            pb2, self.name, interface_class, self.methods, _middlewares
+            pb2,
+            self.name,
+            interface_class,
+            self.methods,
+            _middlewares,
+            _server_streaming_middlewares,
         )
         pb2_grpc_add_func = getattr(pb2_grpc, f"add_{self.interface_name}_to_server")
         pb2_grpc_add_func(self.grpc_servicer(), server)
@@ -396,6 +387,7 @@ def make_grpc_service_from_methods(
     interface_class,
     methods: Dict[str, MethodType],
     middlewares: list[Callable],
+    server_streaming_middlewares: list[Callable],
 ):
     def create_method(method: MethodType):
         if method.name not in service_descriptor.methods_by_name:
@@ -403,10 +395,13 @@ def make_grpc_service_from_methods(
         method_descriptor = service_descriptor.methods_by_name[method.name]
         method.name = f"{service_descriptor.full_name}.{method_descriptor.name}"
         if method.is_response_iterable:
+            rpc_method = method.__call__
+            for middleware in reversed(server_streaming_middlewares):
+                rpc_method = functools.partial(middleware, rpc_method)
 
             async def service_iterable_method(self, request, context):
                 srv_context = ServiceContext(context, method, method_descriptor)
-                async for response in method(request, srv_context):
+                async for response in rpc_method(request, srv_context):
                     yield response
 
             service_iterable_method.__name__ = method.name
