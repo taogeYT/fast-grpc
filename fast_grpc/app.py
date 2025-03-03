@@ -10,6 +10,7 @@ from logzero import logger
 from pydantic import BaseModel
 from grpc_reflection.v1alpha import reflection
 
+from fast_grpc.middleware import ServerErrorMiddleware, ServerStreamingErrorMiddleware
 from fast_grpc.proto import ProtoBuilder
 from fast_grpc.service import (
     Service,
@@ -51,7 +52,10 @@ class FastGRPC(object):
         self.service = Service(name=service_name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{service_name}": self.service}
         self._auto_gen_proto = auto_gen_proto
-        self._middlewares: list[Callable] = []
+        self._middlewares: list[Callable] = [ServerErrorMiddleware()]
+        self._server_streaming_middlewares: list[Callable] = [
+            ServerStreamingErrorMiddleware()
+        ]
 
     def setup(self) -> None:
         builders = {}
@@ -71,15 +75,15 @@ class FastGRPC(object):
                 logger.info(f"Created {proto} file success")
             protoc_compile(proto)
 
-    def add_middleware(self, middleware: Callable) -> None:
-        self._middlewares.append(middleware)
+    def add_middleware(self, middleware: Callable, is_server_streaming=False) -> None:
+        if is_server_streaming:
+            self._server_streaming_middlewares.append(middleware)
+        else:
+            self._middlewares.append(middleware)
 
-    def middleware(self, middleware_type="unary"):
-        if middleware_type != "unary":
-            raise NotImplementedError("middleware_type only support unary")
-
+    def middleware(self, is_server_streaming=False):
         def decorator(func: Callable) -> Callable:
-            self.add_middleware(func)
+            self.add_middleware(func, is_server_streaming)
             return func
 
         return decorator
@@ -211,11 +215,15 @@ class FastGRPC(object):
     def add_to_server(self, server: Server):
         self.setup()
         for service in self._services.values():
-            service.add_to_server(server, self._middlewares)
+            service.add_to_server(
+                server, self._middlewares, self._server_streaming_middlewares
+            )
 
     def enable_server_reflection(self, server: Server):
         service_names = [
-            service.get_pb_full_name() for service in self._services.values()
+            service.get_pb_full_name()
+            for service in self._services.values()
+            if service.grpc_servicer
         ]
         service_names.append(reflection.SERVICE_NAME)
         reflection.enable_server_reflection(service_names, server)
