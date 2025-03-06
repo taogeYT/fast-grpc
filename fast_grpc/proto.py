@@ -92,21 +92,23 @@ class {{ message.name }}(BaseModel):
     {% else %}
     pass
     {%- endif %}
-{% endfor %}
-{% for service in proto_define.services %}
+{% endfor %}{% for service in proto_define.services %}
 class {{ service.name }}Client:
     def __init__(self, target: str="127.0.0.1:50051"):
         self.target = target
-
-    {% for method in service.methods -%}
+    {% for method in service.methods %}{% if not proto_define.is_async %}
     def {{ method.name }}(self, request: {{ method.request }}) -> {{ method.response }}:
         with grpc.insecure_channel(self.target) as channel:
             client = pb2_grpc.{{ service.name }}Stub(channel)
             response = client.{{ method.name }}(pydantic_to_message(request, pb2.{{ method.request }}))
             return message_to_pydantic(response, {{ method.response }})
-
-    {% endfor %}
-{% endfor %}
+    {% else %}
+    async def {{ method.name }}(self, request: {{ method.request }}) -> {{ method.response }}:
+        async with grpc.aio.insecure_channel(self.target) as channel:
+            client = pb2_grpc.{{ service.name }}Stub(channel)
+            response = await client.{{ method.name }}(pydantic_to_message(request, pb2.{{ method.request }}))
+            return message_to_pydantic(response, {{ method.response }})
+    {% endif %}{% endfor %}{% endfor %}
 """
 
 
@@ -145,6 +147,7 @@ class ProtoDefine(BaseModel):
     messages: dict[Any, ProtoStruct]
     enums: dict[Any, ProtoStruct]
     dependencies: set[str] = Field(default_factory=set)
+    is_async: bool = True
 
     def render(self, proto_template) -> str:
         template = Template(proto_template)
@@ -153,7 +156,8 @@ class ProtoDefine(BaseModel):
     def render_proto_file(self):
         return self.render(PROTO_TEMPLATE)
 
-    def render_python_file(self):
+    def render_python_file(self, is_async=False):
+        self.is_async = is_async
         return self.render(PYTHON_TEMPLATE)
 
 
@@ -412,8 +416,8 @@ class ClientBuilder:
         return base_type
 
 
-def proto_to_python_client(proto_path: str):
+def proto_to_python_client(proto_path: str, is_async=False):
     protoc_compile(Path(proto_path))
     builder = ClientBuilder(proto_path)
     proto_define = builder.get_proto()
-    return proto_define.render_python_file()
+    return proto_define.render_python_file(is_async)
