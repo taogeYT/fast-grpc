@@ -162,6 +162,8 @@ async def say_again(request: HelloRequest) -> HelloReply:
 ## Pb2Service
 Use Pb2Service if you're working with generated *_pb2.py and *_pb2_grpc.py files.
 ```python
+import greeter_pb2
+import greeter_pb2_grpc
 srv = Pb2Service("Greeter", pb2_module=greeter_pb2, pb2_grpc_module=greeter_pb2_grpc)
 
 @srv.unary_unary()
