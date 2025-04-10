@@ -22,12 +22,12 @@ from pydantic import BaseModel
 from fast_grpc import FastGRPC
 
 # create a FastGRPC app
-# service_name: defines the default service name in proto file
+# name: defines the default service name in proto file
 # proto: defines the default proto file path
 # auto_gen_proto: if True, will automatically generate proto file from your code
 #                if False, you need to provide your own proto file
 app = FastGRPC(
-    service_name="Greeter",  # default service name
+    name="Greeter",  # default service name
     proto="greeter.proto",   # default proto file path
     auto_gen_proto=True      # auto generate proto file
 )
@@ -132,6 +132,47 @@ async def stream_stream(
 ) -> AsyncIterator[HelloReply]:
     async for message in request:
         yield HelloReply(message=f"SayHello: {message.name}")
+```
+## Use Middleware
+```python
+@app.middleware()
+async def middleware(call_next, request, context):
+    print("before request")
+    response = await call_next(request, context)
+    print("after request")
+    return response
+
+@app.middleware(is_server_streaming=True)
+async def middleware(call_next, request, context):
+    print("before streaming request")
+    async for response in call_next(request, context):
+        yield response
+    print("after streaming request")
+```
+## Service
+Use Service for modular design, similar to FastAPI's router.
+```python
+from fast_grpc import Service
+srv = Service(name="Greeter")
+
+@srv.unary_unary()
+async def say_again(request: HelloRequest) -> HelloReply:
+    return HelloReply(message=f"Greeter SayHello {request.name}")
+```
+## Pb2Service
+Use Pb2Service if you're working with generated *_pb2.py and *_pb2_grpc.py files.
+```python
+srv = Pb2Service("Greeter", pb2_module=greeter_pb2, pb2_grpc_module=greeter_pb2_grpc)
+
+@srv.unary_unary()
+async def say_again(request: HelloRequest) -> HelloReply:
+    return HelloReply(message=f"Greeter SayHello {request.name}")
+```
+## Generate Clients Using Pydantic
+Automatically generate a Pydantic-based gRPC client from .proto files:
+```python
+from fast_grpc.proto import proto_to_python_client
+proto_to_python_client("fast_grpc.proto")
 ```
 
 These examples demonstrate how to implement different types of gRPC streaming methods using FastGRPC. Each method is fully asynchronous, leveraging Python's `async` and `await` syntax for efficient I/O operations.
