@@ -32,25 +32,25 @@ class FastGRPC(object):
     ```python
     from fast_grpc import FastGRPC
 
-    app = FastGRPC(service_name="Greeter", proto="greeter.proto")
+    app = FastGRPC(name="Greeter", proto="greeter.proto")
     ```
     """
 
     def __init__(
         self,
         *,
-        service_name: str = "FastGRPC",
+        name: str = "FastGRPC",
         proto: str = "fast_grpc.proto",
         auto_gen_proto: bool = True,
     ):
         """
         Args:
-            service_name: default grpc service name.
+            name: default grpc service name.
             proto: grpc proto file path.
             auto_gen_proto: Whether to automatically generate proto file or not. if not, the proto file will be defined by yourself.
         """
-        self.service = Service(name=service_name, proto=proto)
-        self._services: dict[str, Service] = {f"{proto}:{service_name}": self.service}
+        self.service = Service(name=name, proto=proto)
+        self._services: dict[str, Service] = {f"{proto}:{name}": self.service}
         self._auto_gen_proto = auto_gen_proto
         self._middlewares: list[Callable] = [ServerErrorMiddleware()]
         self._server_streaming_middlewares: list[Callable] = [
@@ -177,6 +177,7 @@ class FastGRPC(object):
         host: str = "127.0.0.1",
         port: int = 50051,
         server: Optional[Server] = None,
+        reflection_enable: bool = True,
     ) -> None:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
@@ -184,6 +185,7 @@ class FastGRPC(object):
                 host=host,
                 port=port,
                 server=server,
+                reflection_enable=reflection_enable,
             )
         )
         loop.close()
@@ -193,12 +195,12 @@ class FastGRPC(object):
         host: str = "127.0.0.1",
         port: int = 50051,
         server: Optional[Server] = None,
-        enable_reflection: bool = True,
+        reflection_enable: bool = True,
     ) -> None:
         server = grpc.aio.server() if not server else server
         server.add_insecure_port(f"{host}:{port}")
         self.add_to_server(server)
-        if enable_reflection:
+        if reflection_enable:
             self.enable_server_reflection(server)
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from fast_grpc import FastGRPC
 
-app = FastGRPC(service_name="Greeter", proto="greeter.proto")
+app = FastGRPC(name="Greeter", proto="greeter.proto")
 
 
 class HelloRequest(BaseModel):
