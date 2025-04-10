@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "python-fast-grpc"
-version = "0.2.10"
+version = "0.3.0"
 description = "Fast to Code gRPC in Python"
 authors = ["taogeYT <li_yatao@outlook.com>"]
 readme = "README.md"
@@ -40,9 +40,6 @@ exclude = ["build", "dist"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
-
-#[tool.ruff.format]
-#quote-style = "single"
 
 [tool.mypy]
 python_version = "3.9"
