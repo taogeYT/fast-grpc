@@ -32,6 +32,18 @@ mkdocs-material = "^9.5.31"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.ruff]
+line-length = 88
+target-version = 'py39'
+exclude = ["build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+#[tool.ruff.format]
+#quote-style = "single"
+
 [tool.mypy]
 python_version = "3.9"
 plugins = ["pydantic.mypy"]
@@ -44,15 +56,6 @@ warn_redundant_casts = true
 warn_unused_configs = true
 warn_unused_ignores = true
 warn_unreachable = true
-
-[tool.black]
-target-version = [ "py37" ]
-line-length = 120
-skip-numeric-underscore-normalization = true
-exclude = 'dist|build|\.venv|\.git|\.mypy_cache'
-
-[tool.isort]
-profile = "black"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

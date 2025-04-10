@@ -1,5 +1,7 @@
 from typing import AsyncIterator
+
 from pydantic import BaseModel
+
 from fast_grpc import FastGRPC
 
 app = FastGRPC()

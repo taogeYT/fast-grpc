@@ -23,7 +23,7 @@ format: .poetry
 lint: .poetry
 	poetry run ruff check $(sources)
 	poetry run ruff format --check $(sources)
-	poetry run mypy $(sources)
+	poetry run mypy fast_grpc
 
 .PHONY: clean  ## Clear local caches and build artifacts
 clean:

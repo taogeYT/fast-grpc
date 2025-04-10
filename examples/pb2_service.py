@@ -1,7 +1,8 @@
 from pydantic import BaseModel
-from fast_grpc import FastGRPC, Pb2Service
+
 import greeter_pb2
 import greeter_pb2_grpc
+from fast_grpc import FastGRPC, Pb2Service
 
 app = FastGRPC()
 srv = Pb2Service("Greeter", pb2_module=greeter_pb2, pb2_grpc_module=greeter_pb2_grpc)

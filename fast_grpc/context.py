@@ -1,7 +1,7 @@
 import time
+from typing import List, Tuple
 
 import grpc
-from typing import List, Tuple
 
 
 class ServiceContext:

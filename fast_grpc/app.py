@@ -4,21 +4,21 @@ from pathlib import Path
 from typing import Callable, Optional, Type
 
 import grpc
-from grpc.aio._typing import ChannelArgumentType  # noqa
 from grpc.aio import Server
+from grpc.aio._typing import ChannelArgumentType  # noqa
+from grpc_reflection.v1alpha import reflection
 from logzero import logger
 from pydantic import BaseModel
-from grpc_reflection.v1alpha import reflection
 
 from fast_grpc.middleware import ServerErrorMiddleware, ServerStreamingErrorMiddleware
 from fast_grpc.proto import ProtoBuilder
 from fast_grpc.service import (
-    Service,
-    UnaryUnaryMethod,
-    UnaryStreamMethod,
-    StreamUnaryMethod,
-    StreamStreamMethod,
     BaseService,
+    Service,
+    StreamStreamMethod,
+    StreamUnaryMethod,
+    UnaryStreamMethod,
+    UnaryUnaryMethod,
 )
 from fast_grpc.utils import protoc_compile
 

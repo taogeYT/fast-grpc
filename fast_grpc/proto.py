@@ -3,22 +3,22 @@ import datetime
 import typing
 from enum import IntEnum
 from pathlib import Path
-from typing import Type, Sequence, Any, Annotated
+from typing import Annotated, Any, Sequence, Type
 
 import grpc
+from jinja2 import Template
 from pydantic import BaseModel, Field
 from typing_extensions import get_args, get_origin
-from jinja2 import Template
-from google.protobuf.descriptor import (
-    ServiceDescriptor,
-    Descriptor,
-    FieldDescriptor,
-    EnumDescriptor,
-)
 
-from fast_grpc.service import Service, MethodMode
-from fast_grpc.types import Empty, ProtoTag, PYTHON_TO_PROTOBUF_TYPES
-from fast_grpc.utils import protoc_compile, camel_to_snake
+from fast_grpc.service import MethodMode, Service
+from fast_grpc.types import PYTHON_TO_PROTOBUF_TYPES, Empty, ProtoTag
+from fast_grpc.utils import camel_to_snake, protoc_compile
+from google.protobuf.descriptor import (
+    Descriptor,
+    EnumDescriptor,
+    FieldDescriptor,
+    ServiceDescriptor,
+)
 
 _base_types = {
     bytes: "bytes",
@@ -290,8 +290,8 @@ class ClientBuilder:
         )
         self.pb2 = grpc.protos(self._proto_define.package)
         self._proto_package = self.pb2.DESCRIPTOR.package
-        self._processed_messages = []
-        self._processing_stack = set()
+        self._processed_messages: list[Any] = []
+        self._processing_stack: set[Any] = set()
 
     def get_proto(self):
         for service in self.pb2.DESCRIPTOR.services_by_name.values():

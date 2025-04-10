@@ -1,8 +1,9 @@
 import datetime
 from enum import IntEnum
-from pydantic import Field, BaseModel
 
-from fast_grpc import Service, FastGRPC
+from pydantic import BaseModel, Field
+
+from fast_grpc import FastGRPC, Service
 from fast_grpc.types import Empty, Int32
 
 

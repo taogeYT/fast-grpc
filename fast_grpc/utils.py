@@ -3,30 +3,31 @@ import asyncio
 import contextvars
 import functools
 import importlib.util
+import inspect
 import os
 import re
 import subprocess
 import sys
-import inspect
 from importlib import import_module
 from pathlib import Path
 from typing import (
     Any,
+    AsyncIterable,
+    AsyncIterator,
     Callable,
     Dict,
-    AsyncIterator,
-    get_origin,
-    get_args,
-    AsyncIterable,
     ForwardRef,
     Optional,
     Sequence,
+    get_args,
+    get_origin,
 )
+
+from logzero import logger
+from pydantic._internal._typing_extra import eval_type_lenient
 
 from google.protobuf.json_format import MessageToDict, Parse, ParseDict
 from google.protobuf.text_format import MessageToString
-from logzero import logger
-from pydantic._internal._typing_extra import eval_type_lenient
 
 
 def import_string(dotted_path):

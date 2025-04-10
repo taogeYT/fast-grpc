@@ -1,11 +1,11 @@
 import typing
 
 import grpc
-from google.protobuf.message import Message
 from logzero import logger
 
 from fast_grpc.context import ServiceContext
 from fast_grpc.utils import message_to_str
+from google.protobuf.message import Message
 
 
 class ServerErrorMiddleware:

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+
 from fast_grpc import FastGRPC
 
 app = FastGRPC(name="Greeter", proto="greeter.proto")

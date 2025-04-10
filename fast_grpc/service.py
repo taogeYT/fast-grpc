@@ -1,35 +1,35 @@
 import functools
 import inspect
+from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
 from typing import (
-    Dict,
-    Type,
-    Optional,
-    Callable,
-    Union,
-    AsyncIterator,
-    TypeVar,
-    AsyncIterable,
     AsyncGenerator,
+    AsyncIterable,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
 )
 
 from logzero import logger
 from pydantic import BaseModel
-from abc import ABC, abstractmethod
-from google.protobuf.message import Message
 
 from fast_grpc.context import ServiceContext
 from fast_grpc.utils import (
     dict_to_message,
-    import_proto_file,
-    get_typed_signature,
-    snake_to_camel,
     get_param_annotation_model,
-    message_to_str,
+    get_typed_signature,
+    import_proto_file,
     message_to_pydantic,
+    message_to_str,
     pydantic_to_message,
+    snake_to_camel,
 )
+from google.protobuf.message import Message
 
 T = TypeVar("T")
 R = TypeVar("R")
