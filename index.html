@@ -708,7 +708,9 @@ async def say_again(request: HelloRequest) -&gt; HelloReply:
 </code></pre>
 <h2 id="pb2service">Pb2Service</h2>
 <p>Use Pb2Service if you're working with generated <em>_pb2.py and </em>_pb2_grpc.py files.</p>
-<pre><code class="language-python">srv = Pb2Service(&quot;Greeter&quot;, pb2_module=greeter_pb2, pb2_grpc_module=greeter_pb2_grpc)
+<pre><code class="language-python">import greeter_pb2
+import greeter_pb2_grpc
+srv = Pb2Service(&quot;Greeter&quot;, pb2_module=greeter_pb2, pb2_grpc_module=greeter_pb2_grpc)
 
 @srv.unary_unary()
 async def say_again(request: HelloRequest) -&gt; HelloReply:
