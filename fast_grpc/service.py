@@ -393,7 +393,6 @@ def make_grpc_service_from_methods(
         if method.name not in service_descriptor.methods_by_name:
             raise RuntimeError(f"Method '{method.name}' not found")
         method_descriptor = service_descriptor.methods_by_name[method.name]
-        method.name = f"{service_descriptor.full_name}.{method_descriptor.name}"
         if method.is_response_iterable:
             rpc_method = method.__call__
             for middleware in reversed(server_streaming_middlewares):
