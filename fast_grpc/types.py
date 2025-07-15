@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +26,7 @@ PYTHON_TO_PROTOBUF_TYPES = {
     bool: ProtoTag("bool"),
     str: ProtoTag("string"),
     datetime: ProtoTag("string"),
+    UUID: ProtoTag("string"),
 }
 
 

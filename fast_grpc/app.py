@@ -20,6 +20,7 @@ from fast_grpc.service import (
     UnaryStreamMethod,
     UnaryUnaryMethod,
 )
+from fast_grpc.types import ProtoTag
 from fast_grpc.utils import protoc_compile
 
 
@@ -42,12 +43,14 @@ class FastGRPC(object):
         name: str = "FastGRPC",
         proto: str = "fast_grpc.proto",
         auto_gen_proto: bool = True,
+        type_mapping: Optional[dict[type, ProtoTag]] = None,
     ):
         """
         Args:
             name: default grpc service name.
             proto: grpc proto file path.
             auto_gen_proto: Whether to automatically generate proto file or not. if not, the proto file will be defined by yourself.
+            type_mapping: custom type mapping.
         """
         self.service = Service(name=name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{name}": self.service}
@@ -56,6 +59,7 @@ class FastGRPC(object):
         self._server_streaming_middlewares: list[Callable] = [
             ServerStreamingErrorMiddleware()
         ]
+        self._type_mapping = type_mapping
 
     def setup(self) -> None:
         builders = {}
@@ -64,7 +68,9 @@ class FastGRPC(object):
                 continue
             path = Path(service.proto)
             if path not in builders:
-                builders[path] = ProtoBuilder(package=path.stem)
+                builders[path] = ProtoBuilder(
+                    package=path.stem, type_mapping=self._type_mapping
+                )
             builders[path].add_service(service)
         for proto, builder in builders.items():
             if self._auto_gen_proto:
