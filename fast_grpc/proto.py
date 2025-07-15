@@ -192,10 +192,13 @@ def generate_type_name(type_: type) -> str:
 
 
 class ProtoBuilder:
-    def __init__(self, package: str):
+    def __init__(self, package: str, type_mapping=None):
         self._proto_define = ProtoDefine(
             package=package, services=[], messages={}, enums={}
         )
+        self._type_mapping = PYTHON_TO_PROTOBUF_TYPES
+        if type_mapping:
+            self._type_mapping.update(type_mapping)
 
     def add_service(self, service: Service):
         srv = ProtoService(name=service.name, methods=[])
@@ -253,8 +256,8 @@ class ProtoBuilder:
     def _get_type_name(self, type_: Any) -> str:
         if isinstance(type_, str):
             return type_
-        if type_ in PYTHON_TO_PROTOBUF_TYPES:
-            tag = PYTHON_TO_PROTOBUF_TYPES[type_]
+        if type_ in self._type_mapping:
+            tag = self._type_mapping[type_]
             self._proto_define.dependencies.add(tag.package)
             return tag.name
         origin = get_origin(type_)
