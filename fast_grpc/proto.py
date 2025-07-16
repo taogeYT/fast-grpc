@@ -196,11 +196,16 @@ class ProtoBuilder:
         self._proto_define = ProtoDefine(
             package=package, services=[], messages={}, enums={}
         )
+        self._services = []
         self._type_mapping = PYTHON_TO_PROTOBUF_TYPES
         if type_mapping:
             self._type_mapping.update(type_mapping)
 
     def add_service(self, service: Service):
+        self._services.append(service)
+        return self
+
+    def _process_services(self, service: Service):
         srv = ProtoService(name=service.name, methods=[])
         self._proto_define.services.append(srv)
         for name, method in service.methods.items():
@@ -214,9 +219,11 @@ class ProtoBuilder:
             if method.mode in {MethodMode.UNARY_STREAM, MethodMode.STREAM_STREAM}:
                 proto_method.response = f"stream {proto_method.response}"
             srv.methods.append(proto_method)
-        return self
 
     def get_proto(self):
+        for service in self._services:
+            self._process_services(service)
+        self._services.clear()
         return self._proto_define
 
     def convert_message(self, schema: Type[BaseModel]) -> ProtoStruct:
@@ -261,6 +268,15 @@ class ProtoBuilder:
             self._proto_define.dependencies.add(tag.package)
             return tag.name
         origin = get_origin(type_)
+        if origin is None and not isinstance(type_, type):
+            raise ValueError(f"Unsupported type: {type_}")
+        if origin is None and isinstance(type_, type):
+            if issubclass(type_, BaseModel):
+                message = self.convert_message(type_)
+                return message.name
+            if issubclass(type_, IntEnum):
+                struct = self.convert_enum(type_)
+                return struct.name
         args = get_args(type_)
         if origin is typing.Annotated:
             for tag in args[1:]:
@@ -271,18 +287,12 @@ class ProtoBuilder:
         if origin is typing.Union:
             _args = [i for i in args if i is not type(None)]
             return self._get_type_name(_args[0])
-        if origin is None:
-            if issubclass(type_, BaseModel):
-                message = self.convert_message(type_)
-                return message.name
-            if issubclass(type_, IntEnum):
-                struct = self.convert_enum(type_)
-                return struct.name
-        else:
-            if issubclass(origin, Sequence):
-                return f"repeated {self._get_type_name(args[0])}"
-            if issubclass(origin, dict):
-                return f"map <{self._get_type_name(args[0])}, {self._get_type_name(args[1])}>"
+        if issubclass(origin, Sequence):
+            return f"repeated {self._get_type_name(args[0])}"
+        if issubclass(origin, dict):
+            return (
+                f"map <{self._get_type_name(args[0])}, {self._get_type_name(args[1])}>"
+            )
         raise ValueError(f"Unsupported type: {type_}")
 
 
