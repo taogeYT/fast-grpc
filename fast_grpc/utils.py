@@ -26,7 +26,7 @@ from typing import (
 from logzero import logger
 from pydantic._internal._typing_extra import eval_type_lenient
 
-from google.protobuf.json_format import MessageToDict, Parse, ParseDict
+from google.protobuf.json_format import Parse, ParseDict
 from google.protobuf.text_format import MessageToString
 
 
@@ -140,12 +140,6 @@ def import_proto_file(proto_path: Path):
     return _pb2, _pb2_grpc
 
 
-def message_to_dict(message):
-    return MessageToDict(
-        message, including_default_value_fields=True, preserving_proto_field_name=True
-    )
-
-
 def json_to_message(data, message_cls):
     return Parse(data, message_cls(), ignore_unknown_fields=True)
 
@@ -213,6 +207,7 @@ def protoc_compile(
     python_out=".",
     grpc_python_out=".",
     proto_paths: Optional[Sequence[str]] = None,
+    generate_mypy: bool = False,
 ):
     """
     python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. -I. demo.proto
@@ -232,8 +227,10 @@ def protoc_compile(
         "grpc_tools.protoc",
         f"--python_out={python_out}",
         f"--grpc_python_out={grpc_python_out}",
-        "-I.",
     ]
+    if generate_mypy:
+        protoc_args.append(f"--mypy_out={python_out}")
+    protoc_args.append("-I.")
     if proto_paths is not None:
         protoc_args.extend([f"-I{p}" for p in proto_paths])
     for file in proto_files:

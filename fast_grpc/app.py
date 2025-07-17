@@ -44,6 +44,8 @@ class FastGRPC(object):
         proto: str = "fast_grpc.proto",
         auto_gen_proto: bool = True,
         type_mapping: Optional[dict[type, ProtoTag]] = None,
+        compile_proto: bool = True,
+        generate_mypy: bool = False,
     ):
         """
         Args:
@@ -51,6 +53,8 @@ class FastGRPC(object):
             proto: grpc proto file path.
             auto_gen_proto: Whether to automatically generate proto file or not. if not, the proto file will be defined by yourself.
             type_mapping: custom type mapping.
+            compile_proto: Whether to compile proto file or not.
+            generate_mypy: Whether to generate mypy stubs or not.
         """
         self.service = Service(name=name, proto=proto)
         self._services: dict[str, Service] = {f"{proto}:{name}": self.service}
@@ -60,6 +64,8 @@ class FastGRPC(object):
             ServerStreamingErrorMiddleware()
         ]
         self._type_mapping = type_mapping
+        self._compile_proto = compile_proto
+        self._generate_mypy = generate_mypy
 
     def setup(self) -> None:
         builders = {}
@@ -79,7 +85,8 @@ class FastGRPC(object):
                 proto.parent.mkdir(parents=True, exist_ok=True)
                 proto.write_text(content)
                 logger.info(f"Created {proto} file success")
-            protoc_compile(proto)
+            if self._compile_proto:
+                protoc_compile(proto, generate_mypy=self._generate_mypy)
 
     def add_middleware(self, middleware: Callable, is_server_streaming=False) -> None:
         if is_server_streaming:
