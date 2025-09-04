@@ -16,7 +16,7 @@ class ServiceContext:
 
     @property
     def elapsed_time(self):
-        return int(time.time() - self._start_time) * 1000
+        return int((time.time() - self._start_time) * 1000)
 
     @property
     def metadata(self) -> dict[str, str]:
