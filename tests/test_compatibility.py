@@ -14,15 +14,15 @@ def test_import_proto_file():
     proto_file.write_text(
         """
         syntax = "proto3";
-        package test;
+        package test_import;
 
         message TestMessage {
             string name = 1;
             int32 value = 2;
         }
 
-        service TestService {
-            rpc TestMethod (TestMessage) returns (TestMessage);
+        service TestImportService {
+            rpc TestImportMethod (TestMessage) returns (TestMessage);
         }
     """
     )
@@ -38,9 +38,9 @@ def test_import_proto_file():
         assert msg.value == 42
 
         # Test pb2_grpc module
-        assert hasattr(pb2_grpc, "TestServiceServicer")
-        assert hasattr(pb2_grpc, "TestServiceStub")
-        assert hasattr(pb2_grpc, "add_TestServiceServicer_to_server")
+        assert hasattr(pb2_grpc, "TestImportServiceServicer")
+        assert hasattr(pb2_grpc, "TestImportServiceStub")
+        assert hasattr(pb2_grpc, "add_TestImportServiceServicer_to_server")
         # message_to_dict(msg)
 
     finally:
