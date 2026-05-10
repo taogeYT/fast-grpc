@@ -160,8 +160,8 @@ def message_to_pydantic(message, pydantic_model):
 
 
 def pydantic_to_message(schema, message_cls):
-    """Convert pydantic model to protobuf message"""
-    return Parse(schema.model_dump_json(), message_cls(), ignore_unknown_fields=True)
+    """Convert pydantic model to protobuf message via dict (avoids JSON precision loss)"""
+    return ParseDict(schema.model_dump(), message_cls(), ignore_unknown_fields=True)
 
 
 def get_param_annotation_model(annotation, is_streaming=False):
