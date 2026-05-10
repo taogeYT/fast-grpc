@@ -77,8 +77,8 @@ class BaseMethod(ABC):
             self.response_model = self.response_model or response_param_model
         if self.response_model and not issubclass(self.response_model, BaseModel):
             raise ValueError("response_model must be a BaseModel subclass")
-        if self.response_model and not issubclass(self.response_model, BaseModel):
-            raise ValueError("response_model must be a BaseModel subclass")
+        if self.request_model and not issubclass(self.request_model, BaseModel):
+            raise ValueError("request_model must be a BaseModel subclass")
 
     @property
     def is_request_iterable(self):
@@ -114,7 +114,7 @@ class BaseMethod(ABC):
             return response
 
         if self.response_model:
-            validated_response = self.response_model.model_validate(response)
+            validated_response = self.response_model.model_validate(response, from_attributes=True)
             return pydantic_to_message(validated_response, context.output_type)
         if isinstance(response, dict):
             return dict_to_message(response, context.output_type)

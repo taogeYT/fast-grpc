@@ -1,5 +1,5 @@
 import time
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import grpc
 import pytest
@@ -89,8 +89,9 @@ async def test_set_details_method(service_context, mock_grpc_context):
 
 
 async def test_abort_method(service_context, mock_grpc_context):
-    service_context.abort(grpc.StatusCode.NOT_FOUND, "Resource not found")
-    mock_grpc_context.abort.assert_called_with(
+    mock_grpc_context.abort = AsyncMock()
+    await service_context.abort(grpc.StatusCode.NOT_FOUND, "Resource not found")
+    mock_grpc_context.abort.assert_awaited_once_with(
         grpc.StatusCode.NOT_FOUND, "Resource not found"
     )
 

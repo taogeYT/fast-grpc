@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, AsyncMock
 
 import grpc
 import pytest
@@ -23,6 +23,7 @@ def mock_grpc_context():
     context.is_active.return_value = True
     context.time_remaining.return_value = 30.0
     context.peer.return_value = "test_peer"
+    context.abort = AsyncMock()
     return context
 
 
@@ -32,7 +33,6 @@ def mock_service_context(mock_grpc_context):
     method_descriptor.input_type._concrete_class = Mock()
     method_descriptor.output_type._concrete_class = Mock()
 
-    # Create a mock method with name attribute
     mock_method = Mock()
     mock_method.name = "test_method"
 
@@ -42,10 +42,7 @@ def mock_service_context(mock_grpc_context):
         method_descriptor=method_descriptor,
     )
 
-    # Replace context methods with mocks for testing
-    context.set_code = Mock()
-    context.set_details = Mock()
-
+    context.abort = AsyncMock()
     return context
 
 
@@ -76,21 +73,19 @@ async def test_server_error_middleware_success(
 async def test_server_error_middleware_exception(
     server_error_middleware, mock_service_context
 ):
-    # Create a simple protobuf-like mock
     mock_request = Mock()
     mock_request.ListFields.return_value = []
 
     async def mock_call_next(request, context):
         raise ValueError("Test error")
 
-    with pytest.raises(ValueError):
-        await server_error_middleware(
-            mock_call_next, mock_request, mock_service_context
-        )
+    await server_error_middleware(
+        mock_call_next, mock_request, mock_service_context
+    )
 
-    # Verify error handling was called
-    mock_service_context.set_code.assert_called_with(grpc.StatusCode.INTERNAL)
-    mock_service_context.set_details.assert_called_with("Test error")
+    mock_service_context.abort.assert_awaited_once_with(
+        grpc.StatusCode.INTERNAL, "Test error"
+    )
 
 
 async def test_server_error_middleware_grpc_exception(
@@ -102,14 +97,13 @@ async def test_server_error_middleware_grpc_exception(
     async def mock_call_next(request, context):
         raise grpc.RpcError("gRPC error")
 
-    with pytest.raises(grpc.RpcError):
-        await server_error_middleware(
-            mock_call_next, mock_request, mock_service_context
-        )
+    await server_error_middleware(
+        mock_call_next, mock_request, mock_service_context
+    )
 
-    # Middleware should still set code/details for gRPC errors
-    mock_service_context.set_code.assert_called_with(grpc.StatusCode.INTERNAL)
-    mock_service_context.set_details.assert_called_with("gRPC error")
+    mock_service_context.abort.assert_awaited_once_with(
+        grpc.StatusCode.INTERNAL, "gRPC error"
+    )
 
 
 async def test_server_streaming_error_middleware_success(
@@ -141,15 +135,14 @@ async def test_server_streaming_error_middleware_exception(
         yield "response_1"
         raise ValueError("Test streaming error")
 
-    with pytest.raises(ValueError):
-        async for response in server_streaming_error_middleware(
-            mock_call_next, mock_request, mock_service_context
-        ):
-            pass
+    async for response in server_streaming_error_middleware(
+        mock_call_next, mock_request, mock_service_context
+    ):
+        pass
 
-    # Verify error handling was called
-    mock_service_context.set_code.assert_called_with(grpc.StatusCode.INTERNAL)
-    mock_service_context.set_details.assert_called_with("Test streaming error")
+    mock_service_context.abort.assert_awaited_once_with(
+        grpc.StatusCode.INTERNAL, "Test streaming error"
+    )
 
 
 async def test_server_streaming_error_middleware_grpc_exception(
@@ -162,23 +155,20 @@ async def test_server_streaming_error_middleware_grpc_exception(
         yield "response_1"
         raise grpc.RpcError("gRPC streaming error")
 
-    with pytest.raises(grpc.RpcError):
-        async for response in server_streaming_error_middleware(
-            mock_call_next, mock_request, mock_service_context
-        ):
-            pass
+    async for response in server_streaming_error_middleware(
+        mock_call_next, mock_request, mock_service_context
+    ):
+        pass
 
-    # Middleware should still set code/details for gRPC errors
-    mock_service_context.set_code.assert_called_with(grpc.StatusCode.INTERNAL)
-    mock_service_context.set_details.assert_called_with("gRPC streaming error")
+    mock_service_context.abort.assert_awaited_once_with(
+        grpc.StatusCode.INTERNAL, "gRPC streaming error"
+    )
 
 
 async def test_custom_middleware_success():
     async def custom_middleware(call_next, request, context):
-        # Pre-processing
         context.custom_data = "processed"
         response = await call_next(request, context)
-        # Post-processing
         return f"wrapped_{response}"
 
     mock_request = Mock()
@@ -193,11 +183,9 @@ async def test_custom_middleware_success():
 
 async def test_custom_streaming_middleware_success():
     async def custom_streaming_middleware(call_next, request, context):
-        # Pre-processing
         context.custom_data = "processed"
 
         async for response in call_next(request, context):
-            # Process each response
             yield f"wrapped_{response}"
 
     mock_request = Mock()

@@ -21,9 +21,7 @@ class ServerErrorMiddleware:
             logger.exception(
                 f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [Err] -> {repr(e)}"
             )
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+            await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
 
 class ServerStreamingErrorMiddleware:
@@ -40,6 +38,4 @@ class ServerStreamingErrorMiddleware:
             logger.exception(
                 f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [Err] -> {repr(e)}"
             )
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            raise
+            await context.abort(grpc.StatusCode.INTERNAL, str(e))

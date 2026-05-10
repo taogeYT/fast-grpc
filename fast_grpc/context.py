@@ -1,11 +1,10 @@
 import time
-from typing import List, Tuple
 
 import grpc
 
 
 class ServiceContext:
-    def __init__(self, grpc_context: grpc.ServicerContext, method, method_descriptor):
+    def __init__(self, grpc_context: grpc.aio.ServicerContext, method, method_descriptor):
         self.grpc_context = grpc_context
         self.service_method = method
         self.method_descriptor = method_descriptor
@@ -24,23 +23,17 @@ class ServiceContext:
             self._metadata = dict(self.grpc_context.invocation_metadata())
         return self._metadata
 
-    def is_active(self) -> bool:
-        return self.grpc_context.is_active()
-
     def time_remaining(self) -> float:
         return self.grpc_context.time_remaining()
 
-    def invocation_metadata(self) -> List[Tuple[str, str]]:
+    def invocation_metadata(self):
         return self.grpc_context.invocation_metadata()
 
     def peer(self) -> str:
         return self.grpc_context.peer()
 
-    def abort(self, code: grpc.StatusCode, details: str):
-        return self.grpc_context.abort(code, details)
-
-    def abort_with_status(self, status: grpc.Status):
-        return self.grpc_context.abort_with_status(status)
+    async def abort(self, code: grpc.StatusCode, details: str):
+        await self.grpc_context.abort(code, details)
 
     def set_code(self, code: grpc.StatusCode):
         return self.grpc_context.set_code(code)

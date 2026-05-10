@@ -80,3 +80,58 @@ async def test_stream_stream_method(service):
     assert method.mode == MethodMode.STREAM_STREAM
     assert method.request_model == RequestModel
     assert method.response_model == ResponseModel
+
+
+async def test_invalid_request_model_raises_value_error(service):
+    class NotAModel:
+        pass
+
+    with pytest.raises(ValueError, match="request_model must be a BaseModel subclass"):
+
+        @service.unary_unary(request_model=NotAModel)
+        async def test_method(request: RequestModel) -> ResponseModel:
+            return ResponseModel(reply=f"Received: {request.message}")
+
+
+async def test_invalid_response_model_raises_value_error(service):
+    class NotAModel:
+        pass
+
+    with pytest.raises(ValueError, match="response_model must be a BaseModel subclass"):
+
+        @service.unary_unary(response_model=NotAModel)
+        async def test_method(request: RequestModel) -> ResponseModel:
+            return ResponseModel(reply=f"Received: {request.message}")
+
+
+async def test_serialize_response_with_from_attributes():
+    """verify serialize_response uses from_attributes=True to accept objects with attributes"""
+    from unittest.mock import Mock, patch
+    from fast_grpc.service import UnaryUnaryMethod
+
+    async def endpoint(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    method = UnaryUnaryMethod(
+        endpoint=endpoint,
+        request_model=RequestModel,
+        response_model=ResponseModel,
+    )
+
+    mock_context = Mock()
+
+    class DummyPBType:
+        pass
+
+    mock_context.output_type = DummyPBType
+
+    class ArbitraryResponse:
+        reply = "hello from attribute"
+
+    with patch("fast_grpc.service.pydantic_to_message") as mock_convert:
+        method.serialize_response(ArbitraryResponse(), mock_context)
+        # If we reach here without ValidationError, from_attributes=True worked
+        mock_convert.assert_called_once()
+        validated = mock_convert.call_args[0][0]
+        assert isinstance(validated, ResponseModel)
+        assert validated.reply == "hello from attribute"
