@@ -124,9 +124,17 @@ Priority: method > service > global.
 ### Logic
 
 1. Decorators accept an optional `timeout: float` parameter, forwarded to `BaseMethod.__init__()`.
-2. `BaseMethod.__call__()` checks `context.time_remaining()` before executing the endpoint; if the deadline has already passed, it aborts with `DEADLINE_EXCEEDED`.
-3. `ServiceContext.time_remaining()` is already exposed and usable by business logic.
-4. The timeout resolution (method → service → global) happens in `BaseMethod` or during servicer creation in `make_grpc_service_from_methods()`.
+2. The timeout resolution (method → service → global) happens in `BaseMethod`.
+3. Deadline checking strategies differ by RPC mode:
+
+| RPC Mode | Check Strategy |
+|----------|---------------|
+| Unary-Unary | Check `time_remaining()` once before `await endpoint()`. If expired, `abort(DEADLINE_EXCEEDED)`. |
+| Stream-Unary | Check once before iterating the request stream; also check before calling `endpoint()` after collecting all requests. |
+| Unary-Stream | Check before **each `yield`** in the async generator. If expired mid-stream, `abort(DEADLINE_EXCEEDED)`. |
+| Stream-Stream | Check before each `yield` AND before processing each incoming message. |
+
+4. `ServiceContext.time_remaining()` is already exposed and usable by business logic for custom deadline checks.
 
 ### API Example
 
