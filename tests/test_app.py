@@ -229,13 +229,14 @@ async def test_run_async_with_health_check(mock_grpc_server):
         return ResponseModel(reply="ok")
 
     try:
-        await app.run_async(
-            host="127.0.0.1",
-            port=50051,
-            server=mock_server,
-            reflection_enable=False,
-            health_check=True,
-        )
+        with patch.object(app.service, "add_to_server"):
+            await app.run_async(
+                host="127.0.0.1",
+                port=50051,
+                server=mock_server,
+                reflection_enable=False,
+                health_check=True,
+            )
     finally:
         for key in (
             "grpc_health",
