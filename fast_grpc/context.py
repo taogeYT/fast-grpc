@@ -40,3 +40,9 @@ class ServiceContext:
 
     def set_details(self, details: str):
         return self.grpc_context.set_details(details)
+
+    def is_active(self) -> bool:
+        return self.grpc_context.is_active()
+
+    def abort_with_status(self, status):
+        return self.grpc_context.abort_with_status(status)
