@@ -246,6 +246,114 @@ async def test_unary_timeout_proceeds_when_not_exceeded():
     assert result is not None
 
 
+async def test_service_proto_validation():
+    """Service raises ValueError when proto doesn't end with .proto."""
+    with pytest.raises(ValueError, match="must end with '.proto'"):
+        Service("Test", "not_a_valid_extension.txt")
+
+
+async def test_pb2_service_full_name():
+    """Pb2Service full_name uses module name and service name."""
+    from fast_grpc.service import Pb2Service
+    import types
+    pb2_mod = types.ModuleType("test_mod_pb2")
+    pb2_grpc_mod = types.ModuleType("test_mod_pb2_grpc")
+    pb2_mod.__name__ = "test_mod_pb2"
+    pb2_grpc_mod.__name__ = "test_mod_pb2_grpc"
+
+    srv = Pb2Service("MyService", pb2_mod, pb2_grpc_mod)
+    assert srv.name == "MyService"
+    assert srv.full_name == "test_mod_pb2:MyService"
+
+
+async def test_pb2_service_import_pb_modules():
+    """Pb2Service returns stored modules on import_pb_modules."""
+    from fast_grpc.service import Pb2Service
+    import types
+    pb2_mod = types.ModuleType("test_mod_pb2")
+    pb2_grpc_mod = types.ModuleType("test_mod_pb2_grpc")
+
+    srv = Pb2Service("MyService", pb2_mod, pb2_grpc_mod)
+    result_pb2, result_pb2_grpc = srv.import_pb_modules()
+    assert result_pb2 is pb2_mod
+    assert result_pb2_grpc is pb2_grpc_mod
+
+
+async def test_base_service_copy():
+    """BaseService.copy creates independent copy with same name."""
+    srv = Service("TestService", "test.proto")
+    srv.methods["test"] = "dummy"
+    copy = srv.copy()
+    assert copy.name == srv.name
+    assert copy.methods == {}
+
+    # Modify copy doesn't affect original
+    copy.name = "Other"
+    assert srv.name == "TestService"
+
+
+async def test_base_service_interface_name():
+    """BaseService.interface_name is name + Servicer."""
+    srv = Service("Greeter", "test.proto")
+    assert srv.interface_name == "GreeterServicer"
+
+
+async def test_base_service_str():
+    """BaseService.__str__ returns class name + full_name."""
+    srv = Service("Greeter", "test.proto")
+    s = str(srv)
+    assert "Service" in s
+    assert "test.proto:Greeter" in s
+
+
+async def test_service_copy():
+    """Service.copy preserves proto."""
+    srv = Service("TestService", "test.proto")
+    copy = srv.copy()
+    assert isinstance(copy, Service)
+    assert copy.proto == srv.proto
+    assert copy.name == srv.name
+
+
+async def test_make_grpc_service_from_methods():
+    """make_grpc_service_from_methods creates dynamic servicer class."""
+    from unittest.mock import MagicMock
+    from fast_grpc.service import make_grpc_service_from_methods, UnaryUnaryMethod
+    import grpc
+
+    mock_pb2 = MagicMock()
+    mock_method_desc = MagicMock()
+    mock_method_desc.input_type._concrete_class = MagicMock()
+    mock_method_desc.output_type._concrete_class = MagicMock()
+    mock_service_desc = MagicMock()
+    mock_service_desc.methods_by_name = {"Endpoint": mock_method_desc}
+    mock_pb2.DESCRIPTOR.services_by_name = {"TestSvc": mock_service_desc}
+
+    async def endpoint(request):
+        return request
+
+    method = UnaryUnaryMethod(
+        endpoint=endpoint,
+        request_model=RequestModel,
+        response_model=ResponseModel,
+    )
+
+    class DummyInterface:
+        pass
+
+    servicer_class = make_grpc_service_from_methods(
+        mock_pb2,
+        "TestSvc",
+        DummyInterface,
+        {"Endpoint": method},
+        [],
+        [],
+    )
+
+    assert hasattr(servicer_class, "Endpoint")
+    assert issubclass(servicer_class, DummyInterface)
+
+
 async def test_unary_stream_timeout_aborts_mid_stream():
     """Unary-Stream aborts when timeout exceeded during streaming."""
     from fast_grpc.service import UnaryStreamMethod
