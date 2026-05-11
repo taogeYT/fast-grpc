@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import signal
 from pathlib import Path
 from typing import Callable, Optional, Type
 
@@ -206,6 +207,7 @@ class FastGRPC(object):
         ssl_certificate_chain: Optional[str] = None,
         ssl_private_key: Optional[str] = None,
         ca_certificate: Optional[str] = None,
+        graceful_timeout: Optional[float] = None,
     ) -> None:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
@@ -218,6 +220,7 @@ class FastGRPC(object):
                 ssl_certificate_chain=ssl_certificate_chain,
                 ssl_private_key=ssl_private_key,
                 ca_certificate=ca_certificate,
+                graceful_timeout=graceful_timeout,
             )
         )
         loop.close()
@@ -232,6 +235,7 @@ class FastGRPC(object):
         ssl_certificate_chain: Optional[str] = None,
         ssl_private_key: Optional[str] = None,
         ca_certificate: Optional[str] = None,
+        graceful_timeout: Optional[float] = None,
     ) -> None:
         server = grpc.aio.server() if not server else server
 
@@ -284,7 +288,28 @@ class FastGRPC(object):
                     )
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")
-        await server.wait_for_termination()
+
+        if graceful_timeout is not None:
+            stop_event = asyncio.Event()
+
+            def _signal_handler():
+                logger.info("Shutting down gracefully...")
+                stop_event.set()
+
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                try:
+                    loop.add_signal_handler(sig, _signal_handler)
+                except NotImplementedError:
+                    logger.warning(
+                        f"Signal handler for {sig.name} not supported on this platform"
+                    )
+
+            await stop_event.wait()
+            await server.stop(graceful_timeout)
+            logger.info("Server stopped gracefully")
+        else:
+            await server.wait_for_termination()
 
     def add_service(self, service: BaseService) -> None:
         if isinstance(service, Service):

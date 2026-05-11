@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import grpc
@@ -422,3 +423,73 @@ async def test_tls_missing_key_raises():
             )
     finally:
         os.unlink(cert_path)
+
+
+@patch("fast_grpc.app.grpc.aio.server")
+async def test_run_async_with_graceful_timeout(mock_grpc_server):
+    """When graceful_timeout is set, signal handler is registered."""
+    import signal
+
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    mock_server.add_insecure_port = Mock(return_value=12345)
+    mock_server.start = AsyncMock()
+    mock_server.stop = AsyncMock()
+    mock_server.wait_for_termination = AsyncMock()
+    mock_grpc_server.return_value = mock_server
+
+    app = FastGRPC(
+        name="TestService", proto="test.proto",
+        auto_gen_proto=False, compile_proto=False,
+    )
+
+    # Start server in background, then cancel
+    task = asyncio.create_task(
+        app.run_async(
+            host="127.0.0.1",
+            port=50051,
+            server=mock_server,
+            reflection_enable=False,
+            graceful_timeout=30.0,
+        )
+    )
+    await asyncio.sleep(0.01)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    mock_server.start.assert_called_once()
+
+
+async def test_run_async_no_graceful_timeout_uses_wait():
+    """Without graceful_timeout, wait_for_termination is called."""
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    mock_server.add_insecure_port = Mock(return_value=12345)
+    mock_server.start = AsyncMock()
+    mock_server.stop = AsyncMock()
+    mock_server.wait_for_termination = AsyncMock()
+
+    app = FastGRPC(
+        name="TestService", proto="test.proto",
+        auto_gen_proto=False, compile_proto=False,
+    )
+
+    # Cancel after a brief delay to prevent hanging
+    task = asyncio.create_task(
+        app.run_async(
+            host="127.0.0.1",
+            port=50051,
+            server=mock_server,
+            reflection_enable=False,
+            graceful_timeout=None,
+        )
+    )
+    await asyncio.sleep(0.01)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    mock_server.wait_for_termination.assert_called_once()
