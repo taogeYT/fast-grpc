@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import grpc
+import os
 import pytest
+import tempfile
 from pydantic import BaseModel
 
 from fast_grpc import FastGRPC
@@ -301,3 +303,122 @@ async def test_enable_server_reflection(
 
     # The reflection module should be called to enable server reflection
     mock_reflection.enable_server_reflection.assert_called_once()
+
+
+@patch("fast_grpc.app.grpc.aio.server")
+async def test_run_async_with_tls(mock_grpc_server):
+    """When SSL cert and key are provided, add_secure_port is used."""
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    mock_server.add_secure_port = Mock(return_value=12345)
+    mock_server.add_insecure_port = Mock()
+    mock_server.start = AsyncMock()
+    mock_server.wait_for_termination = AsyncMock()
+    mock_grpc_server.return_value = mock_server
+
+    app = FastGRPC(
+        name="TestService", proto="test.proto",
+        auto_gen_proto=False, compile_proto=False,
+    )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
+        f.write("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
+        cert_path = f.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
+        f.write("-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n")
+        key_path = f.name
+
+    try:
+        with patch("fast_grpc.app.grpc.ssl_server_credentials") as mock_ssl_creds:
+            mock_creds = Mock()
+            mock_ssl_creds.return_value = mock_creds
+
+            await app.run_async(
+                host="127.0.0.1",
+                port=50051,
+                server=mock_server,
+                reflection_enable=False,
+                ssl_certificate_chain=cert_path,
+                ssl_private_key=key_path,
+            )
+
+        mock_server.add_secure_port.assert_called_once()
+        mock_server.add_insecure_port.assert_not_called()
+        mock_ssl_creds.assert_called_once()
+    finally:
+        os.unlink(cert_path)
+        os.unlink(key_path)
+
+
+@patch("fast_grpc.app.grpc.aio.server")
+async def test_run_async_with_mtls(mock_grpc_server):
+    """When CA cert is also provided, mTLS is enabled."""
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    mock_server.add_secure_port = Mock(return_value=12345)
+    mock_server.start = AsyncMock()
+    mock_server.wait_for_termination = AsyncMock()
+    mock_grpc_server.return_value = mock_server
+
+    app = FastGRPC(
+        name="TestService", proto="test.proto",
+        auto_gen_proto=False, compile_proto=False,
+    )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
+        f.write("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
+        cert_path = f.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
+        f.write("-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n")
+        key_path = f.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
+        f.write("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
+        ca_path = f.name
+
+    try:
+        with patch("fast_grpc.app.grpc.ssl_server_credentials") as mock_ssl_creds:
+            mock_creds = Mock()
+            mock_ssl_creds.return_value = mock_creds
+
+            await app.run_async(
+                host="127.0.0.1",
+                port=50051,
+                server=mock_server,
+                reflection_enable=False,
+                ssl_certificate_chain=cert_path,
+                ssl_private_key=key_path,
+                ca_certificate=ca_path,
+            )
+
+        call_kwargs = mock_ssl_creds.call_args
+        assert call_kwargs is not None
+    finally:
+        os.unlink(cert_path)
+        os.unlink(key_path)
+        os.unlink(ca_path)
+
+
+async def test_tls_missing_key_raises():
+    """Providing cert without key raises ValueError."""
+    app = FastGRPC(
+        name="TestService", proto="test.proto",
+        auto_gen_proto=False, compile_proto=False,
+    )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
+        f.write("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
+        cert_path = f.name
+
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    mock_server.start = AsyncMock()
+    mock_server.wait_for_termination = AsyncMock()
+
+    try:
+        with pytest.raises(ValueError, match="ssl_private_key"):
+            await app.run_async(
+                host="127.0.0.1",
+                port=50051,
+                server=mock_server,
+                reflection_enable=False,
+                ssl_certificate_chain=cert_path,
+            )
+    finally:
+        os.unlink(cert_path)

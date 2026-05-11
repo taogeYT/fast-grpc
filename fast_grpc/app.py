@@ -203,6 +203,9 @@ class FastGRPC(object):
         server: Optional[Server] = None,
         reflection_enable: bool = True,
         health_check: bool = False,
+        ssl_certificate_chain: Optional[str] = None,
+        ssl_private_key: Optional[str] = None,
+        ca_certificate: Optional[str] = None,
     ) -> None:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
@@ -212,6 +215,9 @@ class FastGRPC(object):
                 server=server,
                 reflection_enable=reflection_enable,
                 health_check=health_check,
+                ssl_certificate_chain=ssl_certificate_chain,
+                ssl_private_key=ssl_private_key,
+                ca_certificate=ca_certificate,
             )
         )
         loop.close()
@@ -223,9 +229,40 @@ class FastGRPC(object):
         server: Optional[Server] = None,
         reflection_enable: bool = True,
         health_check: bool = False,
+        ssl_certificate_chain: Optional[str] = None,
+        ssl_private_key: Optional[str] = None,
+        ca_certificate: Optional[str] = None,
     ) -> None:
         server = grpc.aio.server() if not server else server
-        server.add_insecure_port(f"{host}:{port}")
+
+        if ssl_certificate_chain and ssl_private_key:
+            if not ssl_certificate_chain or not ssl_private_key:
+                raise ValueError(
+                    "Both ssl_certificate_chain and ssl_private_key must be provided for TLS"
+                )
+            with open(ssl_certificate_chain, "rb") as f:
+                cert_chain = f.read()
+            with open(ssl_private_key, "rb") as f:
+                private_key = f.read()
+            root_certificates = None
+            require_client_auth = False
+            if ca_certificate:
+                with open(ca_certificate, "rb") as f:
+                    root_certificates = f.read()
+                require_client_auth = True
+            credentials = grpc.ssl_server_credentials(
+                [(private_key, cert_chain)],
+                root_certificates=root_certificates,
+                require_client_auth=require_client_auth,
+            )
+            server.add_secure_port(f"{host}:{port}", credentials)
+        elif bool(ssl_certificate_chain) != bool(ssl_private_key):
+            raise ValueError(
+                "Both ssl_certificate_chain and ssl_private_key must be provided together"
+            )
+        else:
+            server.add_insecure_port(f"{host}:{port}")
+
         self.add_to_server(server)
         if reflection_enable:
             self.enable_server_reflection(server)
