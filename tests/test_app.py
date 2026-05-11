@@ -150,8 +150,16 @@ async def test_timeout_resolution_from_global():
     assert app._timeout == 30.0
 
 
-async def test_timeout_resolution_chain_in_add_to_server():
+@patch("fast_grpc.app.ProtoBuilder")
+@patch("fast_grpc.app.protoc_compile")
+async def test_timeout_resolution_chain_in_add_to_server(
+    mock_protoc_compile, mock_proto_builder
+):
     """add_to_server resolves timeouts: method > service > app global."""
+    mock_builder_instance = Mock()
+    mock_builder_instance.get_proto.return_value.render_proto_file.return_value = ""
+    mock_proto_builder.return_value = mock_builder_instance
+
     app = FastGRPC(name="TestService", proto="test.proto", timeout=30.0)
 
     @app.unary_unary(timeout=5.0)
@@ -162,12 +170,10 @@ async def test_timeout_resolution_chain_in_add_to_server():
     async def method_without(request: RequestModel) -> ResponseModel:
         return ResponseModel(reply="ok")
 
-    # Simulate resolution logic
-    for svc in app._services.values():
-        svc_timeout = getattr(svc, 'timeout', None)
-        for method in svc.methods.values():
-            if method.timeout is None:
-                method.timeout = svc_timeout or app._timeout
+    # Call real add_to_server, mocking only the pb2 import step
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    with patch.object(app.service, "add_to_server"):
+        app.add_to_server(mock_server)
 
     assert app.service.methods["MethodWith"].timeout == 5.0
     assert app.service.methods["MethodWithout"].timeout == 30.0

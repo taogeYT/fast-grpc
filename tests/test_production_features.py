@@ -66,27 +66,4 @@ async def test_server_timeout_aborts_request():
     )
 
 
-async def test_timeout_resolution_in_add_to_server():
-    """Timeout resolves from method > service > global."""
-    app = FastGRPC(
-        name="TestService", proto="test.proto",
-        timeout=30.0, auto_gen_proto=False, compile_proto=False,
-    )
-
-    @app.unary_unary(timeout=5.0)
-    async def method_with(request: RequestModel) -> ResponseModel:
-        return ResponseModel(reply="ok")
-
-    @app.unary_unary()
-    async def method_without(request: RequestModel) -> ResponseModel:
-        return ResponseModel(reply="ok")
-
-    # Simulate resolution (same as add_to_server does)
-    for svc in app._services.values():
-        svc_timeout = getattr(svc, 'timeout', None)
-        for method in svc.methods.values():
-            if method.timeout is None:
-                method.timeout = svc_timeout or app._timeout
-
-    assert app.service.methods["MethodWith"].timeout == 5.0
-    assert app.service.methods["MethodWithout"].timeout == 30.0
+# Timeout resolution is tested in test_app.py via test_timeout_resolution_chain_in_add_to_server
