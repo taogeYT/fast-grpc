@@ -135,3 +135,46 @@ async def test_serialize_response_with_from_attributes():
         validated = mock_convert.call_args[0][0]
         assert isinstance(validated, ResponseModel)
         assert validated.reply == "hello from attribute"
+
+
+async def test_method_stores_timeout():
+    """BaseMethod stores the timeout parameter."""
+    from fast_grpc.service import UnaryUnaryMethod
+
+    async def endpoint(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    method = UnaryUnaryMethod(
+        endpoint=endpoint,
+        request_model=RequestModel,
+        response_model=ResponseModel,
+        timeout=5.0,
+    )
+    assert method.timeout == 5.0
+
+
+async def test_method_timeout_defaults_to_none():
+    """BaseMethod timeout defaults to None when not specified."""
+    from fast_grpc.service import UnaryUnaryMethod
+
+    async def endpoint(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    method = UnaryUnaryMethod(
+        endpoint=endpoint,
+        request_model=RequestModel,
+        response_model=ResponseModel,
+    )
+    assert method.timeout is None
+
+
+async def test_service_stores_timeout():
+    """Service stores timeout parameter."""
+    srv = Service("TestService", "test.proto", timeout=10.0)
+    assert srv.timeout == 10.0
+
+
+async def test_service_timeout_defaults_to_none():
+    """Service timeout defaults to None."""
+    srv = Service("TestService", "test.proto")
+    assert srv.timeout is None

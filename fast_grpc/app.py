@@ -46,6 +46,7 @@ class FastGRPC(object):
         type_mapping: Optional[dict[type, ProtoTag]] = None,
         compile_proto: bool = True,
         generate_mypy: bool = False,
+        timeout: Optional[float] = None,
     ):
         """
         Args:
@@ -55,8 +56,9 @@ class FastGRPC(object):
             type_mapping: custom type mapping.
             compile_proto: Whether to compile proto file or not.
             generate_mypy: Whether to generate mypy stubs or not.
+            timeout: default timeout in seconds for all methods (can be overridden per-service and per-method).
         """
-        self.service = Service(name=name, proto=proto)
+        self.service = Service(name=name, proto=proto, timeout=timeout)
         self._services: dict[str, Service] = {f"{proto}:{name}": self.service}
         self._auto_gen_proto = auto_gen_proto
         self._middlewares: list[Callable] = [ServerErrorMiddleware()]
@@ -66,6 +68,7 @@ class FastGRPC(object):
         self._type_mapping = type_mapping
         self._compile_proto = compile_proto
         self._generate_mypy = generate_mypy
+        self._timeout = timeout
 
     def setup(self) -> None:
         builders = {}
@@ -108,6 +111,7 @@ class FastGRPC(object):
         request_model: Optional[Type[BaseModel]] = None,
         response_model: Optional[Type[BaseModel]] = None,
         description: str = "",
+        timeout: Optional[float] = None,
     ):
         def decorator(endpoint: Callable) -> Callable:
             self.service.add_method(
@@ -117,6 +121,7 @@ class FastGRPC(object):
                 request_model=request_model,
                 response_model=response_model,
                 description=description,
+                timeout=timeout,
             )
             return endpoint
 
@@ -129,6 +134,7 @@ class FastGRPC(object):
         request_model: Optional[Type[BaseModel]] = None,
         response_model: Optional[Type[BaseModel]] = None,
         description: str = "",
+        timeout: Optional[float] = None,
     ):
         def decorator(endpoint: Callable) -> Callable:
             self.service.add_method(
@@ -138,6 +144,7 @@ class FastGRPC(object):
                 request_model=request_model,
                 response_model=response_model,
                 description=description,
+                timeout=timeout,
             )
             return endpoint
 
@@ -150,6 +157,7 @@ class FastGRPC(object):
         request_model: Optional[Type[BaseModel]] = None,
         response_model: Optional[Type[BaseModel]] = None,
         description: str = "",
+        timeout: Optional[float] = None,
     ):
         def decorator(endpoint: Callable) -> Callable:
             self.service.add_method(
@@ -159,6 +167,7 @@ class FastGRPC(object):
                 request_model=request_model,
                 response_model=response_model,
                 description=description,
+                timeout=timeout,
             )
             return endpoint
 
@@ -171,6 +180,7 @@ class FastGRPC(object):
         request_model: Optional[Type[BaseModel]] = None,
         response_model: Optional[Type[BaseModel]] = None,
         description: str = "",
+        timeout: Optional[float] = None,
     ):
         def decorator(endpoint: Callable) -> Callable:
             self.service.add_method(
@@ -180,6 +190,7 @@ class FastGRPC(object):
                 request_model=request_model,
                 response_model=response_model,
                 description=description,
+                timeout=timeout,
             )
             return endpoint
 

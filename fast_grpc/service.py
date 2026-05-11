@@ -53,12 +53,14 @@ class BaseMethod(ABC):
         request_model: Optional[Type[BaseModel]] = None,
         response_model: Optional[Type[BaseModel]] = None,
         description: str = "",
+        timeout: Optional[float] = None,
     ):
         self.name = name or snake_to_camel(endpoint.__name__)
         self.endpoint = endpoint
         self.request_model = request_model
         self.response_model = response_model
         self.description = description
+        self.timeout = timeout
         endpoint_signature = get_typed_signature(self.endpoint)
         if not (0 < len(endpoint_signature.parameters) <= 2):
             raise NotImplementedError("service method only supports 2 parameters")
@@ -167,14 +169,16 @@ MethodType = Union[
 class BaseService(ABC):
     """Base class for all gRPC services"""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, timeout: Optional[float] = None):
         """
         Args:
             name: your grpc service name.
+            timeout: default timeout in seconds for all methods in this service.
         """
         self.name: str = name
         self.methods: Dict[str, MethodType] = {}
         self.grpc_servicer = None
+        self.timeout: Optional[float] = timeout
 
     @abstractmethod
     def import_pb_modules(self):
@@ -334,13 +338,14 @@ class BaseService(ABC):
 class Service(BaseService):
     """Service implementation using proto file"""
 
-    def __init__(self, name: str, proto: str = ""):
+    def __init__(self, name: str, proto: str = "", timeout: Optional[float] = None):
         """
         Args:
             name: your grpc service name.
             proto: grpc proto file path.
+            timeout: default timeout in seconds for all methods in this service.
         """
-        super().__init__(name)
+        super().__init__(name, timeout=timeout)
         if proto and not proto.endswith(".proto"):
             raise ValueError("Service proto must end with '.proto'")
         self.proto: str = proto
@@ -359,14 +364,15 @@ class Service(BaseService):
 class Pb2Service(BaseService):
     """Service implementation using pb2 modules"""
 
-    def __init__(self, name: str, pb2_module, pb2_grpc_module):
+    def __init__(self, name: str, pb2_module, pb2_grpc_module, timeout: Optional[float] = None):
         """
         Args:
             name: your grpc service name
             pb2_module: the pb2 module containing your service definitions
             pb2_grpc_module: the pb2_grpc module containing your service implementations
+            timeout: default timeout in seconds for all methods in this service.
         """
-        super().__init__(name)
+        super().__init__(name, timeout=timeout)
         self.pb2_module = pb2_module
         self.pb2_grpc_module = pb2_grpc_module
 
