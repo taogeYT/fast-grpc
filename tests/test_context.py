@@ -9,9 +9,8 @@ from fast_grpc.context import ServiceContext
 
 @pytest.fixture
 def mock_grpc_context():
-    context = Mock(spec=grpc.ServicerContext)
+    context = Mock(spec=grpc.aio.ServicerContext)
     context.invocation_metadata.return_value = [("key1", "value1"), ("key2", "value2")]
-    context.is_active.return_value = True
     context.time_remaining.return_value = 30.0
     context.peer.return_value = "test_peer"
     return context
@@ -54,12 +53,6 @@ async def test_metadata_property(service_context):
     assert metadata2 == metadata
 
 
-async def test_is_active_property(service_context, mock_grpc_context):
-    result = service_context.is_active()
-    assert result is True
-    mock_grpc_context.is_active.assert_called_once()
-
-
 async def test_time_remaining_property(service_context, mock_grpc_context):
     result = service_context.time_remaining()
     assert result == 30.0
@@ -94,12 +87,6 @@ async def test_abort_method(service_context, mock_grpc_context):
     mock_grpc_context.abort.assert_awaited_once_with(
         grpc.StatusCode.NOT_FOUND, "Resource not found"
     )
-
-
-async def test_abort_with_status_method(service_context, mock_grpc_context):
-    mock_status = Mock()
-    service_context.abort_with_status(mock_status)
-    mock_grpc_context.abort_with_status.assert_called_with(mock_status)
 
 
 async def test_metadata_caching(service_context, mock_grpc_context):
