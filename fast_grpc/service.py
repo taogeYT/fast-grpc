@@ -15,6 +15,7 @@ from typing import (
     Union,
 )
 
+import grpc
 from logzero import logger
 from pydantic import BaseModel
 
@@ -129,6 +130,11 @@ class UnaryUnaryMethod(BaseMethod):
     async def __call__(
         self, request: Union[Message, AsyncIterable[Message]], context: ServiceContext
     ) -> Message:
+        if self.timeout is not None and context.elapsed_time / 1000.0 >= self.timeout:
+            await context.abort(
+                grpc.StatusCode.DEADLINE_EXCEEDED,
+                f"Server timeout: {self.timeout}s",
+            )
         values = self.solve_params(request, context)
         result = await self.endpoint(**values)
         response = self.serialize_response(result, context)
@@ -151,6 +157,11 @@ class UnaryStreamMethod(BaseMethod):
         values = self.solve_params(request, context)
         iterator_response = self.endpoint(**values)
         async for response in iterator_response:
+            if self.timeout is not None and context.elapsed_time / 1000.0 >= self.timeout:
+                await context.abort(
+                    grpc.StatusCode.DEADLINE_EXCEEDED,
+                    f"Server timeout: {self.timeout}s",
+                )
             yield self.serialize_response(response, context)
         logger.info(
             f"GRPC invoke {context.service_method.name}({message_to_str(request)}) [OK] {context.elapsed_time} ms"
