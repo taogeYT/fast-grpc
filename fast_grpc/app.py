@@ -240,6 +240,12 @@ class FastGRPC(object):
 
     def add_to_server(self, server: Server):
         self.setup()
+        # Resolve timeouts: method > service > global
+        for svc in self._services.values():
+            svc_timeout = getattr(svc, 'timeout', None)
+            for method in svc.methods.values():
+                if method.timeout is None:
+                    method.timeout = svc_timeout or self._timeout
         for service in self._services.values():
             service.add_to_server(
                 server, self._middlewares, self._server_streaming_middlewares

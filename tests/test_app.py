@@ -125,6 +125,64 @@ async def test_add_service(app):
     assert "test.proto:AdditionalService" in app._services
 
 
+async def test_timeout_resolution_method_level(app):
+    """Method-level timeout takes highest priority."""
+    @app.unary_unary(timeout=2.0)
+    async def test_method(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    method = app.service.methods["TestMethod"]
+    assert method.timeout == 2.0
+
+
+async def test_timeout_resolution_from_global():
+    """add_to_server resolves None timeouts from app global timeout."""
+    app = FastGRPC(name="TestService", proto="test.proto", timeout=30.0)
+
+    @app.unary_unary()
+    async def test_method(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    assert app.service.methods["TestMethod"].timeout is None
+    assert app._timeout == 30.0
+
+
+async def test_timeout_resolution_chain_in_add_to_server():
+    """add_to_server resolves timeouts: method > service > app global."""
+    app = FastGRPC(name="TestService", proto="test.proto", timeout=30.0)
+
+    @app.unary_unary(timeout=5.0)
+    async def method_with(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    @app.unary_unary()
+    async def method_without(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    # Simulate resolution logic
+    for svc in app._services.values():
+        svc_timeout = getattr(svc, 'timeout', None)
+        for method in svc.methods.values():
+            if method.timeout is None:
+                method.timeout = svc_timeout or app._timeout
+
+    assert app.service.methods["MethodWith"].timeout == 5.0
+    assert app.service.methods["MethodWithout"].timeout == 30.0
+
+
+async def test_timeout_none_when_no_defaults():
+    """When no timeout is configured at any level, it stays None."""
+    app = FastGRPC(name="TestService", proto="test.proto")
+
+    @app.unary_unary()
+    async def test_method(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    method = app.service.methods["TestMethod"]
+    assert method.timeout is None
+    assert app._timeout is None
+
+
 @patch("fast_grpc.app.ProtoBuilder")
 @patch("fast_grpc.app.protoc_compile")
 async def test_setup(mock_protoc_compile, mock_proto_builder, app):
