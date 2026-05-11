@@ -187,10 +187,10 @@ async def test_timeout_none_when_no_defaults():
 
 
 async def test_health_check_param_default():
-    """health_check defaults to False."""
-    app = FastGRPC(name="TestService", proto="test.proto")
-    # Verify the method signature exists (no crash on defaults)
-    assert True
+    """health_check defaults to False in run()."""
+    import inspect
+    sig = inspect.signature(FastGRPC.run)
+    assert sig.parameters["health_check"].default is False
 
 
 @patch("fast_grpc.app.grpc.aio.server")
@@ -274,19 +274,27 @@ async def test_setup(mock_protoc_compile, mock_proto_builder, app):
 
 
 @patch("fast_grpc.app.grpc.aio.server")
-async def test_add_to_server(mock_grpc_server, app, mock_server):
+@patch("fast_grpc.app.ProtoBuilder")
+@patch("fast_grpc.app.protoc_compile")
+async def test_add_to_server(
+    mock_protoc_compile, mock_proto_builder, mock_grpc_server, app, mock_server
+):
     mock_grpc_server.return_value = mock_server
+    mock_builder_instance = Mock()
+    mock_builder_instance.get_proto.return_value.render_proto_file.return_value = ""
+    mock_proto_builder.return_value = mock_builder_instance
 
     @app.unary_unary()
     async def test_method(request: RequestModel) -> ResponseModel:
         return ResponseModel(reply=f"Received: {request.message}")
 
-    app.add_to_server(mock_server)
+    # Patch service.add_to_server to avoid pb2 import
+    with patch.object(app.service, "add_to_server") as mock_svc_add:
+        app.add_to_server(mock_server)
 
-    # add_to_server should call add_generic_rpc_handlers to register the service
-    # The actual method name might vary based on implementation
-    # These are the minimal assertions we can make safely
-    assert True  # Placeholder - the main goal is to ensure no exceptions
+    mock_svc_add.assert_called_once_with(
+        mock_server, app._middlewares, app._server_streaming_middlewares
+    )
 
 
 @patch("fast_grpc.app.grpc.aio.server")
