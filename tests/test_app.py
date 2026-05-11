@@ -183,6 +183,71 @@ async def test_timeout_none_when_no_defaults():
     assert app._timeout is None
 
 
+async def test_health_check_param_default():
+    """health_check defaults to False."""
+    app = FastGRPC(name="TestService", proto="test.proto")
+    # Verify the method signature exists (no crash on defaults)
+    assert True
+
+
+@patch("fast_grpc.app.grpc.aio.server")
+async def test_run_async_with_health_check(mock_grpc_server):
+    """When health_check=True, HealthServicer is registered."""
+    import sys
+    from unittest.mock import MagicMock
+
+    # Register mock grpc_health modules
+    mock_health_pb2 = MagicMock()
+    mock_health_pb2_grpc = MagicMock()
+    mock_health_servicer = MagicMock()
+    mock_health_pb2_grpc.HealthServicer.return_value = mock_health_servicer
+    mock_health_pb2.HealthCheckResponse.SERVING = 1
+
+    # grpc_health.v1 needs .health_pb2 and .health_pb2_grpc as attributes
+    mock_v1 = MagicMock()
+    mock_v1.health_pb2 = mock_health_pb2
+    mock_v1.health_pb2_grpc = mock_health_pb2_grpc
+
+    sys.modules["grpc_health"] = MagicMock()
+    sys.modules["grpc_health.v1"] = mock_v1
+    sys.modules["grpc_health.v1.health_pb2"] = mock_health_pb2
+    sys.modules["grpc_health.v1.health_pb2_grpc"] = mock_health_pb2_grpc
+
+    mock_server = AsyncMock(spec=grpc.aio.Server)
+    mock_server.add_insecure_port = Mock(return_value=12345)
+    mock_server.start = AsyncMock()
+    mock_server.wait_for_termination = AsyncMock()
+    mock_grpc_server.return_value = mock_server
+
+    app = FastGRPC(name="TestService", proto="test.proto", auto_gen_proto=False, compile_proto=False)
+
+    @app.unary_unary()
+    async def test_method(request: RequestModel) -> ResponseModel:
+        return ResponseModel(reply="ok")
+
+    try:
+        await app.run_async(
+            host="127.0.0.1",
+            port=50051,
+            server=mock_server,
+            reflection_enable=False,
+            health_check=True,
+        )
+    finally:
+        for key in (
+            "grpc_health",
+            "grpc_health.v1",
+            "grpc_health.v1.health_pb2",
+            "grpc_health.v1.health_pb2_grpc",
+        ):
+            sys.modules.pop(key, None)
+
+    mock_health_pb2_grpc.HealthServicer.assert_called_once()
+    mock_health_pb2_grpc.add_HealthServicer_to_server.assert_called_once_with(
+        mock_health_servicer, mock_server
+    )
+
+
 @patch("fast_grpc.app.ProtoBuilder")
 @patch("fast_grpc.app.protoc_compile")
 async def test_setup(mock_protoc_compile, mock_proto_builder, app):

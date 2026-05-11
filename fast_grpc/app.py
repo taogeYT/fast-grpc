@@ -202,6 +202,7 @@ class FastGRPC(object):
         port: int = 50051,
         server: Optional[Server] = None,
         reflection_enable: bool = True,
+        health_check: bool = False,
     ) -> None:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
@@ -210,6 +211,7 @@ class FastGRPC(object):
                 port=port,
                 server=server,
                 reflection_enable=reflection_enable,
+                health_check=health_check,
             )
         )
         loop.close()
@@ -220,12 +222,29 @@ class FastGRPC(object):
         port: int = 50051,
         server: Optional[Server] = None,
         reflection_enable: bool = True,
+        health_check: bool = False,
     ) -> None:
         server = grpc.aio.server() if not server else server
         server.add_insecure_port(f"{host}:{port}")
         self.add_to_server(server)
         if reflection_enable:
             self.enable_server_reflection(server)
+        if health_check:
+            try:
+                from grpc_health.v1 import health_pb2, health_pb2_grpc
+            except ImportError:
+                raise ImportError(
+                    "health_check=True requires grpcio-health-checking. "
+                    "Install it with: pip install grpcio-health-checking"
+                )
+            health_servicer = health_pb2_grpc.HealthServicer()
+            health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+            for svc in self._services.values():
+                if svc.grpc_servicer:
+                    health_servicer.set(
+                        svc.get_pb_full_name(),
+                        health_pb2.HealthCheckResponse.SERVING,
+                    )
         await server.start()
         logger.info(f"Running grpc on {host}:{port}")
         await server.wait_for_termination()
