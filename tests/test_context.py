@@ -1,5 +1,4 @@
-import time
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import grpc
 import pytest
@@ -37,11 +36,10 @@ async def test_service_context_initialization(service_context, mock_grpc_context
 
 
 async def test_elapsed_time_property(service_context):
-    # Test that elapsed_time returns milliseconds
-    time.sleep(0.1)  # Sleep for 100ms
+    # Verify elapsed_time returns a value in milliseconds (non-negative int)
     elapsed = service_context.elapsed_time
-    assert elapsed >= 100  # Should be at least 100ms
-    assert elapsed < 200  # Should be less than 200ms
+    assert isinstance(elapsed, int)
+    assert elapsed >= 0
 
 
 async def test_metadata_property(service_context):
@@ -100,8 +98,11 @@ async def test_metadata_caching(service_context, mock_grpc_context):
     mock_grpc_context.invocation_metadata.assert_called_once()
 
 
-async def test_elapsed_time_accuracy():
-    # Test that elapsed_time calculates correctly
+@patch("time.time")
+async def test_elapsed_time_accuracy(mock_time):
+    # Test that elapsed_time calculates correctly using mocked time
+    mock_time.return_value = 1000.0  # Start at 1000 seconds
+
     mock_grpc_context = Mock()
     method_descriptor = Mock()
     method_descriptor.input_type._concrete_class = Mock()
@@ -113,13 +114,7 @@ async def test_elapsed_time_accuracy():
         method_descriptor=method_descriptor,
     )
 
-    # Get initial elapsed time (should be very small)
-    initial_elapsed = context.elapsed_time
-    assert initial_elapsed >= 0
-    assert initial_elapsed < 50  # Should be less than 50ms
-
-    # Wait a bit and check again
-    time.sleep(0.1)
-    elapsed_after_sleep = context.elapsed_time
-    assert elapsed_after_sleep >= 100  # Should be at least 100ms
-    assert elapsed_after_sleep < 200  # Should be less than 200ms
+    # Advance time by 3.5 seconds
+    mock_time.return_value = 1003.5
+    elapsed = context.elapsed_time
+    assert elapsed == 3500  # 3.5 seconds in ms
