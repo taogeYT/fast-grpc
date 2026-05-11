@@ -1,0 +1,1512 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Fast to Code gRPC in Python">
+      
+      
+      
+        <link rel="canonical" href="https://taogeYT.github.io/fast-grpc/superpowers/specs/2026-05-11-production-readiness-design/">
+      
+      
+        <link rel="prev" href="../../plans/2026-05-11-production-readiness/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Production Readiness Design - FastGRPC</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#production-readiness-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="FastGRPC" class="md-header__button md-logo" aria-label="FastGRPC" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastGRPC
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Production Readiness Design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/taogeYT/fast-grpc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    taogeYT/fast-grpc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="FastGRPC" class="md-nav__button md-logo" aria-label="FastGRPC" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FastGRPC
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/taogeYT/fast-grpc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    taogeYT/fast-grpc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Superpowers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Superpowers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/2026-05-11-production-readiness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production Readiness Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production Readiness Design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production Readiness Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-1-tlsmtls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 1: TLS/mTLS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 1: TLS/mTLS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-parameters-on-run-run_async" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Parameters on run() / run_async()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-2-graceful-shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 2: Graceful Shutdown
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 2: Graceful Shutdown">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-3-health-checking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 3: Health Checking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 3: Health Checking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-parameter_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-4-timeout-and-deadline-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 4: Timeout and Deadline Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 4: Timeout and Deadline Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#three-layer-timeout-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three-Layer Timeout Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-affected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Affected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backward-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backward Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-1-tlsmtls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 1: TLS/mTLS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 1: TLS/mTLS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-parameters-on-run-run_async" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Parameters on run() / run_async()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-2-graceful-shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 2: Graceful Shutdown
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 2: Graceful Shutdown">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-3-health-checking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 3: Health Checking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 3: Health Checking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-parameter_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-4-timeout-and-deadline-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature 4: Timeout and Deadline Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature 4: Timeout and Deadline Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#three-layer-timeout-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three-Layer Timeout Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-example_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-affected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Affected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backward-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backward Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="production-readiness-design">Production Readiness Design</h1>
+<h2 id="overview">Overview</h2>
+<p>Add four production-grade features to FastGRPC: TLS/mTLS, graceful shutdown, health checking, and timeout/deadline control. Each feature is independent and opt-in, following the existing FastAPI-style philosophy.</p>
+<h2 id="feature-1-tlsmtls">Feature 1: TLS/mTLS</h2>
+<h3 id="scope">Scope</h3>
+<ul>
+<li><code>app.py</code>: <code>run()</code> and <code>run_async()</code> methods</li>
+</ul>
+<h3 id="new-parameters-on-run-run_async">New Parameters on <code>run()</code> / <code>run_async()</code></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ssl_certificate_chain</code></td>
+<td><code>str \| Path \| None</code></td>
+<td><code>None</code></td>
+<td>Server certificate chain file path (PEM)</td>
+</tr>
+<tr>
+<td><code>ssl_private_key</code></td>
+<td><code>str \| Path \| None</code></td>
+<td><code>None</code></td>
+<td>Server private key file path (PEM)</td>
+</tr>
+<tr>
+<td><code>ca_certificate</code></td>
+<td><code>str \| Path \| None</code></td>
+<td><code>None</code></td>
+<td>CA root certificate path; providing it enables mTLS</td>
+</tr>
+</tbody>
+</table>
+<h3 id="logic">Logic</h3>
+<ul>
+<li>If both <code>ssl_certificate_chain</code> and <code>ssl_private_key</code> are provided: read files, call <code>grpc.ssl_server_credentials()</code> to build server credentials, use <code>server.add_secure_port()</code> instead of <code>add_insecure_port()</code>.</li>
+<li>If <code>ca_certificate</code> is also provided: pass <code>root_certificates</code> to enable mTLS (clients must present certificates signed by this CA).</li>
+<li>If neither is provided: keep existing behavior (<code>add_insecure_port</code>).</li>
+</ul>
+<h3 id="api-example">API Example</h3>
+<pre><code class="language-python"># TLS only
+app.run(ssl_certificate_chain=&quot;server.crt&quot;, ssl_private_key=&quot;server.key&quot;)
+
+# mTLS
+app.run(
+    ssl_certificate_chain=&quot;server.crt&quot;,
+    ssl_private_key=&quot;server.key&quot;,
+    ca_certificate=&quot;ca.crt&quot;,
+)
+</code></pre>
+<h3 id="dependencies">Dependencies</h3>
+<p>None — <code>grpc.ssl_server_credentials</code> is already part of <code>grpcio</code>.</p>
+<hr />
+<h2 id="feature-2-graceful-shutdown">Feature 2: Graceful Shutdown</h2>
+<h3 id="scope_1">Scope</h3>
+<ul>
+<li><code>app.py</code>: <code>run_async()</code> method</li>
+</ul>
+<h3 id="new-parameter">New Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>graceful_timeout</code></td>
+<td><code>float \| None</code></td>
+<td><code>None</code></td>
+<td>Max seconds to wait for in-flight requests to complete after receiving a termination signal. <code>None</code> means immediate shutdown.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="logic_1">Logic</h3>
+<ol>
+<li>Register <code>SIGTERM</code> / <code>SIGINT</code> signal handlers in the asyncio event loop.</li>
+<li>On signal: log "Shutting down gracefully...", call <code>server.stop(graceful_timeout)</code>.</li>
+<li><code>server.stop(None)</code> stops immediately (preserves backward compatibility).</li>
+<li><code>server.stop(30.0)</code> waits up to 30 seconds, then force-terminates.</li>
+<li>Replace the blocking <code>server.wait_for_termination()</code> with an <code>asyncio.Event</code> that gets set when a signal is received.</li>
+</ol>
+<h3 id="api-example_1">API Example</h3>
+<pre><code class="language-python"># Production: wait up to 30s for in-flight requests
+app.run(graceful_timeout=30.0)
+
+# Dev/test: immediate shutdown (default)
+app.run()
+</code></pre>
+<h3 id="dependencies_1">Dependencies</h3>
+<p>None — pure <code>asyncio</code> + <code>grpc.aio</code> capabilities.</p>
+<hr />
+<h2 id="feature-3-health-checking">Feature 3: Health Checking</h2>
+<h3 id="scope_2">Scope</h3>
+<ul>
+<li><code>app.py</code>: <code>run()</code> / <code>run_async()</code> and <code>add_to_server()</code></li>
+</ul>
+<h3 id="new-parameter_1">New Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>health_check</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Enable the gRPC Health Checking protocol (grpc.health.v1.Health)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="logic_2">Logic</h3>
+<ol>
+<li>When enabled, register the <code>grpc_health.v1.Health</code> servicer on the gRPC server.</li>
+<li>Servicer reports <code>SERVING</code> / <code>NOT_SERVING</code> status for each registered service.</li>
+<li>Natively compatible with K8s gRPC liveness/readiness probes.</li>
+</ol>
+<h3 id="api-example_2">API Example</h3>
+<pre><code class="language-python">app.run(health_check=True)
+</code></pre>
+<h3 id="dependencies_2">Dependencies</h3>
+<p><code>grpcio-health-checking&gt;=1.43.0</code> — lazy-imported, only required when <code>health_check=True</code>.</p>
+<hr />
+<h2 id="feature-4-timeout-and-deadline-control">Feature 4: Timeout and Deadline Control</h2>
+<h3 id="scope_3">Scope</h3>
+<ul>
+<li><code>app.py</code>: <code>FastGRPC.__init__()</code> and decorator methods</li>
+<li><code>service.py</code>: <code>BaseMethod.__init__()</code> and <code>BaseMethod.__call__()</code></li>
+<li><code>context.py</code>: <code>ServiceContext</code></li>
+</ul>
+<h3 id="three-layer-timeout-configuration">Three-Layer Timeout Configuration</h3>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Location</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Method</td>
+<td><code>@app.unary_unary(timeout=5.0)</code></td>
+<td>Per-RPC timeout in seconds</td>
+</tr>
+<tr>
+<td>Service</td>
+<td><code>Service(name="X", timeout=10.0)</code></td>
+<td>Default timeout for all methods in a service</td>
+</tr>
+<tr>
+<td>Global</td>
+<td><code>FastGRPC(timeout=30.0)</code></td>
+<td>Application-level fallback default</td>
+</tr>
+</tbody>
+</table>
+<p>Priority: method &gt; service &gt; global.</p>
+<h3 id="logic_3">Logic</h3>
+<ol>
+<li>Decorators accept an optional <code>timeout: float</code> parameter, forwarded to <code>BaseMethod.__init__()</code>.</li>
+<li>The timeout resolution (method → service → global) happens in <code>BaseMethod</code>.</li>
+<li>Deadline checking strategies differ by RPC mode:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>RPC Mode</th>
+<th>Check Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unary-Unary</td>
+<td>Check <code>time_remaining()</code> once before <code>await endpoint()</code>. If expired, <code>abort(DEADLINE_EXCEEDED)</code>.</td>
+</tr>
+<tr>
+<td>Stream-Unary</td>
+<td>Check once before iterating the request stream; also check before calling <code>endpoint()</code> after collecting all requests.</td>
+</tr>
+<tr>
+<td>Unary-Stream</td>
+<td>Check before <strong>each <code>yield</code></strong> in the async generator. If expired mid-stream, <code>abort(DEADLINE_EXCEEDED)</code>.</td>
+</tr>
+<tr>
+<td>Stream-Stream</td>
+<td>Check before each <code>yield</code> AND before processing each incoming message.</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li><code>ServiceContext.time_remaining()</code> is already exposed and usable by business logic for custom deadline checks.</li>
+</ol>
+<h3 id="api-example_3">API Example</h3>
+<pre><code class="language-python"># Global fallback
+app = FastGRPC(timeout=30.0)
+
+# Method-level override
+@app.unary_unary(timeout=5.0)
+async def quick_op(request: HelloRequest) -&gt; HelloReply:
+    ...
+
+# Check remaining deadline in business logic
+@app.unary_unary()
+async def slow_op(request: HelloRequest, ctx: ServiceContext) -&gt; HelloReply:
+    remaining = ctx.time_remaining()
+    if remaining &lt; 1.0:
+        raise TimeoutError(&quot;not enough time&quot;)
+    ...
+</code></pre>
+<h3 id="dependencies_3">Dependencies</h3>
+<p>None.</p>
+<hr />
+<h2 id="files-affected">Files Affected</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fast_grpc/app.py</code></td>
+<td>New params on <code>__init__</code>, <code>run()</code>, <code>run_async()</code>, decorators; signal handling; TLS setup; health check registration</td>
+</tr>
+<tr>
+<td><code>fast_grpc/service.py</code></td>
+<td><code>timeout</code> field on <code>BaseMethod</code>, deadline check in <code>__call__</code></td>
+</tr>
+<tr>
+<td><code>fast_grpc/context.py</code></td>
+<td>No changes needed (<code>time_remaining()</code> already exists)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="backward-compatibility">Backward Compatibility</h2>
+<p>All new parameters have defaults that preserve existing behavior. No breaking changes.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
